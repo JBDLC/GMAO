@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Modifier{% else %}Nouvelle{% endif %} machine{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .form-label {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .form-control, .form-select {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+    font-weight: 500;
+  }
+  .btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #5a6268;
+    color: white;
+  }
+  h5 {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .row.g-3 > [class*="col-"] {
+      margin-bottom: 1rem;
+    }
+    
+    .btn-success, .btn-secondary {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    
+    .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .card-body {
+      padding: 1rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+    
+    .row.g-3 > [class*="col-md-"] {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <h1 class="page-title">{% if is_edit %}Modifier{% else %}Créer{% endif %} une machine ou sous-machine</h1>
+</div>
+
+<div class="form-card">
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Nom</label>
+    <input class="form-control" type="text" name="name" value="{% if is_edit and machine %}{{ machine.name }}{% endif %}" required />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Code</label>
+    <input class="form-control" type="text" name="code" value="{% if is_edit and machine %}{{ machine.code }}{% endif %}" required />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Parent (optionnel)</label>
+    <select class="form-select" name="parent_id" id="parentSelect">
+      <option value="">-- racine --</option>
+      {% for parent_machine in parents %}
+        <option value="{{ parent_machine.id }}" {% if is_edit and machine and machine.parent_id == parent_machine.id %}selected{% endif %}>
+          {{ parent_machine.name }} ({{ parent_machine.code }})
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Stock associé (optionnel)</label>
+    <select class="form-select" name="stock_id">
+      <option value="">Aucun stock</option>
+      {% for stock in stocks %}
+        <option value="{{ stock.id }}" {% if is_edit and machine and machine.stock_id == stock.id %}selected{% endif %}>
+          {{ stock.name }} ({{ stock.code }})
+        </option>
+      {% endfor %}
+    </select>
+    <small class="form-text text-muted">Ce stock sera sélectionné par défaut lors de la création d'une maintenance pour cette machine.</small>
+  </div>
+  
+  <!-- Section pour compteurs multiples (machines racines uniquement) -->
+  {% if not is_edit %}
+  <div class="mb-3 d-none" id="multipleCountersSection">
+    <h5>Compteurs multiples (machine racine)</h5>
+    <p class="text-muted small">Les machines racines peuvent avoir plusieurs compteurs nommés.</p>
+    <div id="countersContainer">
+      <!-- Les compteurs seront ajoutés ici dynamiquement -->
+    </div>
+    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="addCounterBtn">+ Ajouter un compteur</button>
+  </div>
+  {% endif %}
+  
+  <!-- Section pour compteur unique (sous-machines) -->
+  <div class="mb-3 d-none" id="singleCounterSection">
+    <div class="form-check form-switch mb-3">
+      <input class="form-check-input" type="checkbox" role="switch" name="hour_counter" id="hourCounterToggle" {% if is_edit and machine and machine.hour_counter_enabled %}checked{% endif %} />
+      <label class="form-check-label" for="hourCounterToggle">Ajouter un compteur</label>
+    </div>
+    <div class="mb-3 {% if not is_edit or not machine or not machine.hour_counter_enabled %}d-none{% endif %}" id="counterFields">
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Valeur initiale</label>
+          <input class="form-control" type="number" step="0.1" name="initial_hours" value="{% if is_edit and machine %}{{ machine.hours }}{% else %}0{% endif %}" />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Unité</label>
+          <input class="form-control" type="text" name="counter_unit" placeholder="h, cycles, anneaux, etc." value="{% if is_edit and machine and machine.counter_unit %}{{ machine.counter_unit }}{% else %}h{% endif %}" maxlength="20" />
+        </div>
+      </div>
+    </div>
+  </div>
+  <button class="btn btn-success">{% if is_edit %}Modifier{% else %}Créer{% endif %}</button>
+  <a href="{% if is_edit and machine %}{{ url_for('machine_detail', machine_id=machine.id) }}{% else %}{{ url_for('machines') }}{% endif %}" class="btn btn-secondary">Annuler</a>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const parentSelect = document.getElementById("parentSelect");
+  const multipleCountersSection = document.getElementById("multipleCountersSection");
+  const singleCounterSection = document.getElementById("singleCounterSection");
+  const countersContainer = document.getElementById("countersContainer");
+  const addCounterBtn = document.getElementById("addCounterBtn");
+  const isEditMode = {% if is_edit %}true{% else %}false{% endif %};
+  let counterIndex = 0;
+  
+  // Template pour un compteur
+  function createCounterRow(index) {
+    return `
+      <div class="card mb-3 counter-row" data-index="${index}">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Compteur ${index + 1}</h6>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-counter" data-index="${index}">🗑️</button>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Nom du compteur <span class="text-danger">*</span></label>
+              <input class="form-control" type="text" name="counter_name_${index}" placeholder="Ex: Heures moteur" required />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Valeur initiale</label>
+              <input class="form-control" type="number" step="0.1" name="counter_value_${index}" value="0" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Unité</label>
+              <input class="form-control" type="text" name="counter_unit_${index}" placeholder="h, cycles, etc." value="h" maxlength="20" />
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  // Fonction pour mettre à jour l'affichage selon le parent sélectionné
+  function updateCounterSections() {
+    if (!parentSelect) return;
+    
+    const isRoot = !parentSelect.value;
+    
+    if (isRoot && !isEditMode && multipleCountersSection && countersContainer) {
+      // Machine racine : afficher la section compteurs multiples
+      multipleCountersSection.classList.remove("d-none");
+      if (singleCounterSection) singleCounterSection.classList.add("d-none");
+      
+      // Ajouter un premier compteur si le conteneur est vide
+      if (countersContainer.children.length === 0) {
+        addCounter();
+      }
+    } else {
+      // Sous-machine : afficher la section compteur unique
+      if (multipleCountersSection) multipleCountersSection.classList.add("d-none");
+      if (singleCounterSection) singleCounterSection.classList.remove("d-none");
+      if (countersContainer) {
+        countersContainer.innerHTML = "";
+        counterIndex = 0;
+      }
+    }
+  }
+  
+  // Fonction pour ajouter un compteur
+  function addCounter() {
+    if (!countersContainer) return;
+    
+    const counterHtml = createCounterRow(counterIndex);
+    countersContainer.insertAdjacentHTML("beforeend", counterHtml);
+    counterIndex++;
+    
+    // Attacher l'événement de suppression
+    const removeBtn = countersContainer.querySelector(`.remove-counter[data-index="${counterIndex - 1}"]`);
+    if (removeBtn) {
+      removeBtn.addEventListener("click", function() {
+        const row = this.closest(".counter-row");
+        if (row) row.remove();
+      });
+    }
+  }
+  
+  // Gestion du toggle pour le compteur unique
+  const toggle = document.getElementById("hourCounterToggle");
+  const block = document.getElementById("counterFields");
+  if (toggle && block) {
+    toggle.addEventListener("change", () => {
+      block.classList.toggle("d-none", !toggle.checked);
+    });
+  }
+  
+  // Écouter les changements du sélecteur de parent
+  if (parentSelect) {
+    parentSelect.addEventListener("change", updateCounterSections);
+  }
+  
+  // Bouton pour ajouter un compteur
+  if (addCounterBtn) {
+    addCounterBtn.addEventListener("click", addCounter);
+  }
+  
+  // Initialiser au chargement
+  updateCounterSections();
+</script>
+{% endblock %}
+

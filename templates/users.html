@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Gestion des utilisateurs{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  .table thead th {
+    color: #1a3b50;
+    font-weight: 600;
+    border-bottom: 2px solid #1a3b50;
+    background: #f8f9fa;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-danger:hover {
+    background-color: #c82333;
+    border-color: #c82333;
+    color: white;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start !important;
+    }
+    
+    .btn-success {
+      width: 100%;
+    }
+    
+    .table-responsive {
+      font-size: 0.875rem;
+    }
+    
+    .table th, .table td {
+      padding: 0.5rem 0.25rem;
+    }
+    
+    .btn-sm {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .table th, .table td {
+      padding: 0.375rem 0.125rem;
+      font-size: 0.8rem;
+    }
+    
+    .table th:nth-child(2),
+    .table td:nth-child(2) {
+      display: none;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">{{ t('Gestion des utilisateurs') }}</h1>
+    <a class="btn btn-success" href="{{ url_for('new_user') }}">+ {{ t('Nouvel utilisateur') }}</a>
+  </div>
+</div>
+
+{% if users %}
+<div class="table-responsive mt-3">
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>{{ t('Identifiant') }}</th>
+        <th>{{ t('Type') }}</th>
+        <th>{{ t('Actions') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>{{ user.username }}</td>
+        <td>
+          <span class="badge bg-secondary">{{ user.user_type }}</span>
+        </td>
+        <td>
+          {% if user.username != "admin123" and user.id != current_user.id %}
+          <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cet utilisateur ?') }}');">
+            <button class="btn btn-danger btn-sm" type="submit">{{ t('Supprimer') }}</button>
+          </form>
+          {% else %}
+          <span class="text-muted">-</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info mt-3" style="background-color: #e3f2fd; border-color: #1a3b50; color: #1a3b50;">
+  <p class="mb-0">{{ t('Aucun utilisateur enregistré') }}.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+
+
+
+
+
+
+
+

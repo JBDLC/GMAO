@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Scanner QR Code{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .info-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .btn-outline-secondary {
+    border-color: #6c757d;
+    color: #6c757d;
+  }
+  .btn-outline-secondary:hover {
+    background-color: #6c757d;
+    color: white;
+  }
+  h5 {
+    color: #1a3b50;
+    font-weight: 600;
+  }
+  .alert-info {
+    background-color: #e3f2fd;
+    border-color: #1a3b50;
+    color: #1a3b50;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .info-card {
+      padding: 1rem;
+    }
+    
+    .btn-outline-secondary {
+      width: 100%;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .info-card {
+      padding: 0.75rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">Scanner QR Code</h1>
+  <a href="{{ url_for('machines') }}" class="btn btn-outline-secondary">Retour aux machines</a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <h5 class="mb-3">Scanner le QR code d'une machine</h5>
+        <div id="reader" style="width: 100%; min-height: 300px;"></div>
+        <div id="result" class="mt-3"></div>
+      </div>
+      <div class="col-md-6">
+        <h5 class="mb-3">Instructions</h5>
+        <ul>
+          <li>Autorisez l'accès à la caméra lorsque demandé</li>
+          <li>Placez le QR code de la machine devant la caméra</li>
+          <li>La page de la machine s'ouvrira automatiquement</li>
+        </ul>
+        <div class="alert alert-info mt-3">
+          <strong>Note :</strong> Le scanner fonctionne mieux avec une bonne luminosité et un QR code bien visible.
+        </div>
+      </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+let html5QrcodeScanner;
+let isScanning = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+  const resultContainer = document.getElementById('result');
+  const readerDiv = document.getElementById('reader');
+  
+  function onScanSuccess(decodedText, decodedResult) {
+    // Le QR code contient l'ID de la machine
+    const machineId = decodedText.trim();
+    
+    // Vérifier que c'est un nombre valide
+    if (/^\d+$/.test(machineId)) {
+      // Arrêter le scanner
+      if (html5QrcodeScanner && isScanning) {
+        html5QrcodeScanner.stop().then(() => {
+          html5QrcodeScanner.clear();
+          isScanning = false;
+        }).catch(err => {
+          console.error("Erreur lors de l'arrêt du scanner:", err);
+        });
+      }
+      
+      // Afficher un message de succès
+      resultContainer.innerHTML = `<div class="alert alert-success">QR code détecté ! Redirection en cours...</div>`;
+      
+      // Rediriger vers la machine
+      setTimeout(() => {
+        window.location.href = `/machines/qrcode/${machineId}`;
+      }, 500);
+    } else {
+      resultContainer.innerHTML = `<div class="alert alert-warning">QR code invalide : ${decodedText}. Le QR code doit contenir un ID de machine.</div>`;
+    }
+  }
+
+  function onScanFailure(error) {
+    // Erreurs silencieuses - on continue à scanner
+    // Ne pas afficher d'erreur pour les scans échoués normaux
+  }
+
+  // Initialiser le scanner
+  html5QrcodeScanner = new Html5Qrcode("reader");
+  
+  // Fonction pour démarrer le scanner
+  function startScanner() {
+    if (isScanning) return;
+    
+    // Essayer d'abord avec la caméra arrière, puis la caméra avant
+    const config = { 
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    };
+    
+    html5QrcodeScanner.start(
+      { facingMode: "environment" }, // Utiliser la caméra arrière
+      config,
+      onScanSuccess,
+      onScanFailure
+    ).then(() => {
+      isScanning = true;
+      resultContainer.innerHTML = `<div class="alert alert-info">Scanner activé. Placez le QR code devant la caméra.</div>`;
+    }).catch(err => {
+      // Si la caméra arrière échoue, essayer la caméra avant
+      console.log("Tentative avec caméra arrière échouée, essai avec caméra avant...");
+      html5QrcodeScanner.start(
+        { facingMode: "user" }, // Utiliser la caméra avant
+        config,
+        onScanSuccess,
+        onScanFailure
+      ).then(() => {
+        isScanning = true;
+        resultContainer.innerHTML = `<div class="alert alert-info">Scanner activé. Placez le QR code devant la caméra.</div>`;
+      }).catch(err2 => {
+        // Gérer les erreurs d'accès à la caméra
+        console.error("Erreur d'accès à la caméra:", err2);
+        resultContainer.innerHTML = 
+          `<div class="alert alert-danger">
+            <strong>Erreur :</strong> Impossible d'accéder à la caméra. 
+            <ul class="mb-0 mt-2">
+              <li>Vérifiez que vous avez autorisé l'accès à la caméra dans les paramètres de votre navigateur</li>
+              <li>Assurez-vous d'utiliser HTTPS ou localhost</li>
+              <li>Vérifiez que votre caméra n'est pas utilisée par une autre application</li>
+            </ul>
+            <button class="btn btn-primary mt-2" onclick="location.reload()">Réessayer</button>
+          </div>`;
+      });
+    });
+  }
+  
+  // Démarrer le scanner
+  startScanner();
+});
+
+// Nettoyer le scanner quand on quitte la page
+window.addEventListener('beforeunload', function() {
+  if (html5QrcodeScanner && isScanning) {
+    html5QrcodeScanner.stop().then(() => {
+      html5QrcodeScanner.clear();
+    }).catch(err => {
+      // Ignorer les erreurs de nettoyage
+    });
+  }
+});
+
+// Nettoyer aussi quand on quitte la page (pagehide)
+window.addEventListener('pagehide', function() {
+  if (html5QrcodeScanner && isScanning) {
+    html5QrcodeScanner.stop().then(() => {
+      html5QrcodeScanner.clear();
+    }).catch(err => {
+      // Ignorer les erreurs de nettoyage
+    });
+  }
+});
+</script>
+{% endblock %}
+

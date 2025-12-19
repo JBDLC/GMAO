@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Modifier{% else %}Nouveau{% endif %} compteur{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .form-label {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+    font-weight: 500;
+  }
+  .btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #5a6268;
+    color: white;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .btn-success, .btn-secondary {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('machines') }}">Machines</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('machine_detail', machine_id=machine.id) }}">{{ machine.name }}</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('machine_counters', machine_id=machine.id) }}">Compteurs</a></li>
+      <li class="breadcrumb-item active">{% if is_edit %}Modifier{% else %}Nouveau{% endif %}</li>
+    </ol>
+  </nav>
+  <h1 class="page-title">{% if is_edit %}Modifier{% else %}Nouveau{% endif %} compteur</h1>
+</div>
+
+<div class="form-card">
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Nom du compteur <span class="text-danger">*</span></label>
+    <input class="form-control" type="text" name="name" value="{% if is_edit and counter %}{{ counter.name }}{% endif %}" required placeholder="Ex: Heures moteur, Cycles, etc." />
+    <small class="form-text text-muted">Nom unique pour identifier ce compteur</small>
+  </div>
+  
+  {% if not is_edit %}
+  <div class="mb-3">
+    <label class="form-label">Valeur initiale</label>
+    <input class="form-control" type="number" step="0.1" name="initial_value" value="0" />
+    <small class="form-text text-muted">Valeur de départ du compteur</small>
+  </div>
+  {% endif %}
+  
+  <div class="mb-3">
+    <label class="form-label">Unité</label>
+    <input class="form-control" type="text" name="unit" placeholder="h, cycles, anneaux, etc." value="{% if is_edit and counter and counter.unit %}{{ counter.unit }}{% else %}h{% endif %}" maxlength="20" />
+    <small class="form-text text-muted">Unité de mesure du compteur</small>
+  </div>
+  
+  <div class="mt-4">
+    <button class="btn btn-success">{% if is_edit %}Modifier{% else %}Créer{% endif %}</button>
+    <a href="{{ url_for('machine_counters', machine_id=machine.id) }}" class="btn btn-secondary">Annuler</a>
+  </div>
+</form>
+</div>
+{% endblock %}
+

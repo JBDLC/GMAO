@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}QR Code - {{ machine.name }}{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .info-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .btn-outline-secondary {
+    border-color: #6c757d;
+    color: #6c757d;
+  }
+  .btn-outline-secondary:hover {
+    background-color: #6c757d;
+    color: white;
+  }
+  h4 {
+    color: #1a3b50;
+    font-weight: 600;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start !important;
+    }
+    
+    .btn-outline-secondary {
+      width: 100%;
+    }
+    
+    .info-card {
+      padding: 1rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .info-card {
+      padding: 0.75rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">QR Code de la machine</h1>
+    <a href="{{ url_for('machine_detail', machine_id=machine.id) }}" class="btn btn-outline-secondary">Retour à la machine</a>
+  </div>
+</div>
+
+<div class="info-card text-center mt-3">
+    <div class="mb-4">
+      <img src="{{ url_for('machine_qrcode_image', machine_id=machine.id) }}" 
+           alt="QR Code" 
+           class="img-fluid" 
+           style="max-width: 400px; width: 100%;" />
+    </div>
+    
+    <div class="mt-4">
+      <h4 class="mb-2">{{ machine.name }}</h4>
+      <p class="text-muted mb-0" style="font-size: 1.1rem;">
+        <strong>Code :</strong> {{ machine.code }}
+      </p>
+    </div>
+    
+    <div class="mt-3">
+      <small class="text-muted">
+        Scannez ce QR code pour accéder rapidement à la page de cette machine
+      </small>
+    </div>
+</div>
+{% endblock %}
+

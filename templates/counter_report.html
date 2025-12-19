@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Relevé compteur{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  .table thead th {
+    color: #1a3b50;
+    font-weight: 600;
+    border-bottom: 2px solid #1a3b50;
+    background: #f8f9fa;
+  }
+  .form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-outline-secondary {
+    border-color: #6c757d;
+    color: #6c757d;
+  }
+  .btn-outline-secondary:hover {
+    background-color: #6c757d;
+    color: white;
+  }
+  .card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: none;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start !important;
+    }
+    
+    .btn-outline-secondary {
+      width: 100%;
+    }
+    
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .table-responsive {
+      font-size: 0.875rem;
+    }
+    
+    .table th, .table td {
+      padding: 0.5rem 0.25rem;
+    }
+    
+    .btn-success {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+    
+    .table th, .table td {
+      padding: 0.375rem 0.125rem;
+      font-size: 0.8rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">Relevé des compteurs</h1>
+  <button
+    class="btn btn-outline-secondary"
+    type="button"
+    data-bs-toggle="collapse"
+    data-bs-target="#counterHistory"
+    aria-expanded="false"
+    aria-controls="counterHistory"
+  >
+    Afficher l'historique
+  </button>
+</div>
+
+<form method="post">
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Machine / Compteur</th>
+          <th>Code</th>
+          <th>Dernier relevé</th>
+          <th>Nouveau relevé</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for machine in machines %}
+        {% set unit = machine.counter_unit or 'h' %}
+        <tr>
+          <td>{{ machine.name }}</td>
+          <td>{{ machine.code }}</td>
+          <td>{{ "%.1f"|format(machine.hours) }} {{ unit }}</td>
+          <td style="max-width:160px;">
+            <input
+              class="form-control"
+              type="number"
+              min="{{ machine.hours }}"
+              step="0.1"
+              name="machine_{{ machine.id }}"
+              placeholder="Nouvelle valeur"
+            />
+          </td>
+        </tr>
+        {% endfor %}
+        {% if root_counters_by_machine %}
+        {% set current_root = None %}
+        {% for root_machine_counter, counter in root_counters_by_machine %}
+          {% if current_root != root_machine_counter %}
+            {% set current_root = root_machine_counter %}
+            <tr>
+              <td colspan="4" class="bg-light fw-bold pt-2 pb-1">Compteurs de {{ root_machine_counter.name }} (machine racine)</td>
+            </tr>
+          {% endif %}
+          {% set unit = counter.unit or 'h' %}
+          <tr>
+            <td>{{ counter.name }}</td>
+            <td>{{ root_machine_counter.code }}</td>
+            <td>{{ "%.1f"|format(counter.value) }} {{ unit }}</td>
+            <td style="max-width:160px;">
+              <input
+                class="form-control"
+                type="number"
+                min="{{ counter.value }}"
+                step="0.1"
+                name="counter_{{ counter.id }}"
+                placeholder="Nouvelle valeur"
+              />
+            </td>
+          </tr>
+        {% endfor %}
+        {% elif root_counters %}
+        {% if root_machine %}
+        <tr>
+          <td colspan="4" class="bg-light fw-bold pt-2 pb-1">Compteurs de {{ root_machine.name }} (machine racine)</td>
+        </tr>
+        {% endif %}
+        {% for counter in root_counters %}
+        {% set unit = counter.unit or 'h' %}
+        <tr>
+          <td>{{ counter.name }}</td>
+          <td>{{ root_machine.code if root_machine else '' }}</td>
+          <td>{{ "%.1f"|format(counter.value) }} {{ unit }}</td>
+          <td style="max-width:160px;">
+            <input
+              class="form-control"
+              type="number"
+              min="{{ counter.value }}"
+              step="0.1"
+              name="counter_{{ counter.id }}"
+              placeholder="Nouvelle valeur"
+            />
+          </td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-3">
+    <button class="btn btn-success">Valider le relevé</button>
+  </div>
+</form>
+</div>
+
+<div class="collapse mt-4" id="counterHistory">
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Historique des relevés</strong>
+      <a class="btn btn-sm btn-link" href="{{ url_for('counter_logs') }}">Voir plus</a>
+    </div>
+    <div class="card-body p-0">
+      {% if logs %}
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Machine</th>
+              <th>Code</th>
+              <th>Compteur</th>
+              <th>Ancien</th>
+              <th>Nouveau</th>
+              <th>Différence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+            {% if log.counter %}
+              {% set counter_name = log.counter.name %}
+              {% set unit = log.counter.unit or 'h' %}
+            {% else %}
+              {% set counter_name = "Compteur machine" %}
+              {% set unit = log.machine.counter_unit or 'h' %}
+            {% endif %}
+            <tr>
+              <td>{{ log.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+              <td>{{ log.machine.name }}</td>
+              <td>{{ log.machine.code }}</td>
+              <td>{{ counter_name }}</td>
+              <td>{{ "%.1f"|format(log.previous_hours) }} {{ unit }}</td>
+              <td>{{ "%.1f"|format(log.new_hours) }} {{ unit }}</td>
+              <td>{{ "%.1f"|format(log.new_hours - log.previous_hours) }} {{ unit }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="m-3 text-muted">Aucun relevé pour le moment.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+

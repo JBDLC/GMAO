@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% block title %}Mouvements{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .movement-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #1a3b50;
+    transition: all 0.2s;
+  }
+  .movement-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-primary {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-primary:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-outline-primary {
+    border-color: #1a3b50;
+    color: #1a3b50;
+  }
+  .btn-outline-primary:hover {
+    background-color: #1a3b50;
+    color: white;
+  }
+  .btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+  }
+  .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start !important;
+    }
+    
+    .btn-group {
+      flex-direction: column;
+      width: 100%;
+    }
+    
+    .btn-group > * {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    
+    .movement-card {
+      padding: 1rem;
+    }
+    
+    .movement-card .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    
+    .btn-group.ms-2 {
+      width: 100%;
+      margin-left: 0 !important;
+      margin-top: 0.5rem;
+    }
+    
+    .modal-dialog {
+      margin: 0.5rem;
+    }
+    
+    .modal-content {
+      padding: 1rem;
+    }
+    
+    .row.g-3 > [class*="col"] {
+      margin-bottom: 1rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .movement-card {
+      padding: 0.75rem;
+    }
+    
+    .row.g-3 > [class*="col"] {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">Mouvements</h1>
+  <div class="btn-group">
+    <a href="{{ url_for('export_movements') }}" class="btn btn-success" title="Exporter en Excel">📊 Export Excel</a>
+    {% if current_user.user_type in ['admin', 'gestionnaire'] %}
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#movementModal" onclick="openMovementModal()">
+      + Nouveau mouvement
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{% if movements %}
+<div class="mt-3">
+  {% for move in movements %}
+  <div class="movement-card">
+    <div class="d-flex justify-content-between align-items-start">
+      <div class="flex-grow-1">
+        <div class="d-flex justify-content-between">
+          <strong>
+            {% if move.type == "sortie" and move.maintenance_info %}
+              {{ move.maintenance_info.name }} - {{ move.maintenance_info.machine_code }} - {{ move.maintenance_info.machine_name }} - {{ move.type|capitalize }}
+            {% else %}
+              {{ move.type|capitalize }}
+            {% endif %}
+          </strong>
+          <small>{{ move.created_at.strftime("%d/%m/%Y %H:%M") }}</small>
+        </div>
+        {% if move.source_stock %}<div>Source : {{ move.source_stock.name }}</div>{% endif %}
+        {% if move.dest_stock %}<div>Destination : {{ move.dest_stock.name }}</div>{% endif %}
+        <ul class="mb-0">
+          {% for item in move.items %}
+          <li>{{ item.product.name }} ({{ item.product.code }}) - {{ item.quantity|int }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% if not move.is_maintenance_related and current_user.user_type in ['admin', 'gestionnaire'] %}
+      <div class="btn-group ms-2">
+        <button type="button" class="btn btn-sm btn-outline-primary" title="Modifier" data-bs-toggle="modal" data-bs-target="#movementModal" onclick="openEditMovementModal({{ move.id }}, '{{ move.type }}', {% if move.source_stock_id %}{{ move.source_stock_id }}{% else %}null{% endif %}, {% if move.dest_stock_id %}{{ move.dest_stock_id }}{% else %}null{% endif %}, '{{ move.created_at.strftime('%Y-%m-%dT%H:%M') }}', {{ move.items|map(attribute='product_id')|list|tojson }}, {{ move.items|map(attribute='quantity')|list|tojson }})">✏️</button>
+        <form method="post" action="{{ url_for('delete_movement', movement_id=move.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce mouvement ?');">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer">🗑️</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info mt-3" style="background-color: #e3f2fd; border-color: #1a3b50; color: #1a3b50;">
+  <p class="mb-0">Aucun mouvement.</p>
+</div>
+{% endif %}
+
+<!-- Modal pour nouveau/édition mouvement -->
+<div class="modal fade" id="movementModal" tabindex="-1" aria-labelledby="movementModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="movementModalLabel">Nouveau mouvement</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" id="movementForm" action="{{ url_for('movements') }}">
+        <input type="hidden" id="movementId" name="movement_id" value="">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Type</label>
+            <select class="form-select" name="type" id="movementType" required>
+              <option value="entree">Entrée</option>
+              <option value="sortie">Sortie</option>
+              <option value="transfert">Transfert</option>
+            </select>
+          </div>
+          <div class="row g-3">
+            <div class="col">
+              <label class="form-label">Stock source</label>
+              <select class="form-select" name="source_stock_id" id="sourceStock">
+                <option value="">--</option>
+                {% for stock in stocks %}
+                <option value="{{ stock.id }}" data-stock-id="{{ stock.id }}">{{ stock.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col">
+              <label class="form-label">Stock destination</label>
+              <select class="form-select" name="dest_stock_id" id="destStock">
+                <option value="">--</option>
+                {% for stock in stocks %}
+                <option value="{{ stock.id }}" data-stock-id="{{ stock.id }}">{{ stock.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label">Date / heure</label>
+            <input class="form-control" type="datetime-local" name="created_at" id="movementDate" />
+          </div>
+          <hr />
+          <h5>Produits</h5>
+          <input
+            class="form-control mb-2"
+            type="text"
+            placeholder="Recherche par nom ou code"
+            id="productSearch"
+          />
+          <div id="productRows">
+            <div class="row g-2 mb-2 product-row">
+              <div class="col-8">
+                <select class="form-select" name="product_id">
+                  <option value="">Produit...</option>
+                  {% for product in products %}
+                  <option
+                    value="{{ product.id }}"
+                    data-search="{{ (product.name ~ ' ' ~ product.code)|lower }}"
+                  >
+                    {{ product.name }} ({{ product.code }})
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-4">
+                <input class="form-control" name="quantity" type="number" step="1" min="1" placeholder="Qté" />
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" id="addRow">+ Produit</button>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-success">Valider</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const typeSelect = document.getElementById("movementType");
+  const sourceSelect = document.getElementById("sourceStock");
+  const destSelect = document.getElementById("destStock");
+  const bloc = document.getElementById("productRows");
+  const addRowBtn = document.getElementById("addRow");
+  const dateInput = document.getElementById("movementDate");
+  const form = document.getElementById("movementForm");
+  const searchInput = document.getElementById("productSearch");
+
+  function syncStockSelectors() {
+    const type = typeSelect.value;
+    sourceSelect.closest(".col").classList.toggle("d-none", type === "entree");
+    destSelect.closest(".col").classList.toggle("d-none", type === "sortie");
+  }
+
+  typeSelect.addEventListener("change", syncStockSelectors);
+  syncStockSelectors();
+
+  addRowBtn.addEventListener("click", () => {
+    const row = bloc.querySelector(".product-row").cloneNode(true);
+    row.querySelectorAll("select, input").forEach((el) => {
+      el.value = "";
+    });
+    bloc.appendChild(row);
+  });
+
+  function filterOptions(query) {
+    const selects = bloc.querySelectorAll("select");
+    selects.forEach((select) => {
+      select.querySelectorAll("option").forEach((option) => {
+        if (!option.value) return;
+        const textData = option.dataset.search || option.textContent.toLowerCase();
+        option.hidden = query && !textData.includes(query);
+      });
+    });
+  }
+
+  searchInput.addEventListener("input", () => {
+    const query = searchInput.value.trim().toLowerCase();
+    filterOptions(query);
+  });
+
+  function setNow() {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+    dateInput.value = localISOTime;
+  }
+
+  function openMovementModal() {
+    // Mode création
+    document.getElementById('movementModalLabel').textContent = 'Nouveau mouvement';
+    document.getElementById('movementId').value = '';
+    form.action = '{{ url_for("movements") }}';
+    setNow();
+    syncStockSelectors();
+    // Réinitialiser le formulaire
+    form.reset();
+    bloc.innerHTML = bloc.querySelector(".product-row").outerHTML;
+    setNow();
+    syncStockSelectors();
+  }
+
+  function openEditMovementModal(movementId, type, sourceStockId, destStockId, createdAt, productIds, quantities) {
+    // Mode édition
+    document.getElementById('movementModalLabel').textContent = 'Modifier le mouvement';
+    document.getElementById('movementId').value = movementId;
+    form.action = '{{ url_for("edit_movement", movement_id=0) }}'.replace('/0/', '/' + movementId + '/');
+    
+    // Remplir les champs
+    document.getElementById('movementType').value = type;
+    document.getElementById('sourceStock').value = sourceStockId || '';
+    document.getElementById('destStock').value = destStockId || '';
+    document.getElementById('movementDate').value = createdAt;
+    
+    syncStockSelectors();
+    
+    // Remplir les produits - sauvegarder le template de base
+    const templateRow = bloc.querySelector('.product-row');
+    const templateHTML = templateRow ? templateRow.outerHTML : '';
+    
+    // Vider et recréer les lignes
+    bloc.innerHTML = '';
+    for (let i = 0; i < productIds.length; i++) {
+      let row;
+      if (i === 0 && templateRow) {
+        row = templateRow.cloneNode(true);
+      } else {
+        row = templateRow ? templateRow.cloneNode(true) : createProductRow();
+      }
+      const select = row.querySelector('select[name="product_id"]');
+      const input = row.querySelector('input[name="quantity"]');
+      if (select) select.value = productIds[i];
+      if (input) input.value = quantities[i];
+      bloc.appendChild(row);
+    }
+    
+    // S'assurer qu'il y a au moins une ligne
+    if (bloc.children.length === 0) {
+      const firstRow = templateRow ? templateRow.cloneNode(true) : createProductRow();
+      bloc.appendChild(firstRow);
+    }
+    
+    // Ouvrir la modal
+    const modal = new bootstrap.Modal(document.getElementById('movementModal'));
+    modal.show();
+  }
+
+  function createProductRow() {
+    const row = document.createElement('div');
+    row.className = 'row g-2 mb-2 product-row';
+    row.innerHTML = `
+      <div class="col-8">
+        <select class="form-select" name="product_id">
+          <option value="">Produit...</option>
+          {% for product in products %}
+          <option value="{{ product.id }}" data-search="{{ (product.name ~ ' ' ~ product.code)|lower }}">
+            {{ product.name }} ({{ product.code }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-4">
+        <input class="form-control" name="quantity" type="number" step="1" min="1" placeholder="Qté" />
+      </div>
+    `;
+    return row;
+  }
+
+  form.addEventListener("submit", () => {
+    setNow();
+  });
+</script>
+{% endblock %}

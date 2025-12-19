@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: gmao-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    database:
+      name: gmao-db
+      databaseName: gmao
+      user: gmao_user
+      plan: free
+
+

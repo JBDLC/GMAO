@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}{% if template %}Modifier{% else %}Nouvelle{% endif %} Check List{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .form-label {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+    font-weight: 500;
+  }
+  .btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #5a6268;
+    color: white;
+  }
+  .btn-outline-primary {
+    border-color: #1a3b50;
+    color: #1a3b50;
+  }
+  .btn-outline-primary:hover {
+    background-color: #1a3b50;
+    color: white;
+  }
+  .btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+  }
+  .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .btn-success, .btn-secondary, .btn-outline-primary, .btn-outline-danger {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('machines') }}">Machines</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('machine_detail', machine_id=machine.id) }}">{{ machine.name }}</a></li>
+      <li class="breadcrumb-item active">{% if template %}Modifier{% else %}Nouvelle{% endif %} Check List</li>
+    </ol>
+  </nav>
+  <h1 class="page-title">{% if template %}Modifier{% else %}Nouvelle{% endif %} Check List</h1>
+</div>
+
+<div class="form-card">
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Nom de la check list <span class="text-danger">*</span></label>
+    <input type="text" class="form-control" name="name" value="{{ template.name if template else '' }}" required />
+  </div>
+  
+  <div class="mb-3">
+    <label class="form-label">Éléments de la check list</label>
+    {% if not template %}
+    <div class="mb-3">
+      <label class="form-label">Charger depuis un modèle existant (optionnel)</label>
+      <select class="form-select" id="loadFromTemplate" onchange="loadTemplateItems(this.value)">
+        <option value="">Sélectionner une checklist pour pré-remplir les éléments...</option>
+        {% for checklist in all_checklists %}
+        <option value="{{ checklist.id }}">{{ checklist.name }} ({{ checklist.machine.name }})</option>
+        {% endfor %}
+      </select>
+      <small class="form-text text-muted">Sélectionnez une checklist existante pour pré-remplir les éléments. Vous pourrez ensuite les modifier ou en ajouter d'autres.</small>
+    </div>
+    {% endif %}
+    <div id="items-container">
+      {% if template and template.items %}
+        {% for item in template.items %}
+        <div class="input-group mb-2 item-row">
+          <input type="text" class="form-control" name="item_label" value="{{ item.label }}" placeholder="Libellé de l'élément" />
+          <button type="button" class="btn btn-outline-danger remove-item">🗑️</button>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="input-group mb-2 item-row">
+          <input type="text" class="form-control" name="item_label" placeholder="Libellé de l'élément" />
+          <button type="button" class="btn btn-outline-danger remove-item">🗑️</button>
+        </div>
+      {% endif %}
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-item">+ Ajouter un élément</button>
+  </div>
+  
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-success">Enregistrer</button>
+    <a href="{{ url_for('machine_detail', machine_id=machine.id) }}" class="btn btn-secondary">Annuler</a>
+  </div>
+</form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const container = document.getElementById('items-container');
+  const addButton = document.getElementById('add-item');
+  
+  addButton.addEventListener('click', function() {
+    const row = document.createElement('div');
+    row.className = 'input-group mb-2 item-row';
+    row.innerHTML = `
+      <input type="text" class="form-control" name="item_label" placeholder="Libellé de l'élément" />
+      <button type="button" class="btn btn-outline-danger remove-item">🗑️</button>
+    `;
+    container.appendChild(row);
+    
+    // Ajouter l'événement de suppression
+    row.querySelector('.remove-item').addEventListener('click', function() {
+      row.remove();
+    });
+  });
+  
+  // Ajouter les événements de suppression aux éléments existants
+  document.querySelectorAll('.remove-item').forEach(btn => {
+    btn.addEventListener('click', function() {
+      this.closest('.item-row').remove();
+    });
+  });
+  
+  // Fonction pour charger les items d'une checklist existante
+  async function loadTemplateItems(templateId) {
+    if (!templateId) return;
+    
+    try {
+      const response = await fetch(`/api/checklist-template/${templateId}/items`);
+      const data = await response.json();
+      
+      if (data.success && data.items && data.items.length > 0) {
+        // Vider les lignes existantes sauf la première
+        const itemsContainer = document.getElementById('items-container');
+        const existingRows = itemsContainer.querySelectorAll('.item-row');
+        existingRows.forEach((row, index) => {
+          if (index > 0) {
+            row.remove();
+          } else {
+            // Vider la première ligne
+            const input = row.querySelector('input[name="item_label"]');
+            if (input) input.value = '';
+          }
+        });
+        
+        // Ajouter les items du modèle
+        data.items.forEach((item, index) => {
+          let row;
+          if (index === 0) {
+            // Utiliser la première ligne existante
+            row = itemsContainer.querySelector('.item-row');
+          } else {
+            // Cloner la première ligne pour les autres
+            const template = itemsContainer.querySelector('.item-row');
+            row = template.cloneNode(true);
+            itemsContainer.appendChild(row);
+            
+            // Ajouter l'événement de suppression au nouveau bouton
+            const removeBtn = row.querySelector('.remove-item');
+            if (removeBtn) {
+              removeBtn.addEventListener('click', function() {
+                this.closest('.item-row').remove();
+              });
+            }
+          }
+          
+          // Remplir le champ label
+          const labelInput = row.querySelector('input[name="item_label"]');
+          if (labelInput) labelInput.value = item.label;
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement de la checklist:", error);
+      alert("Erreur lors du chargement de la checklist");
+    }
+  }
+  
+  // Exposer la fonction globalement
+  window.loadTemplateItems = loadTemplateItems;
+});
+</script>
+{% endblock %}
+

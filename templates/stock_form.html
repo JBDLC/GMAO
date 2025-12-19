@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Nouveau stock{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .form-label {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .btn-success {
+      width: 100%;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <h1 class="page-title">Créer un stock</h1>
+</div>
+
+{% if not can_create %}
+<div class="alert alert-warning">
+  <strong>Limite atteinte :</strong> Le nombre maximum de stocks est limité à 10. Vous avez actuellement {{ existing_stocks_count }} stock(s).
+</div>
+{% else %}
+<div class="form-card">
+  <p class="text-muted mb-3">Nombre de stocks actuels : {{ existing_stocks_count }}/10</p>
+  <form method="post">
+  <div class="mb-3">
+    <label class="form-label">Nom</label>
+    <input class="form-control" name="name" required />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Code</label>
+    <input class="form-control" name="code" required />
+  </div>
+    <div class="mt-4">
+      <button class="btn btn-success">Créer</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+

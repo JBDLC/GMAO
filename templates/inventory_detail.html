@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Inventaire - {{ inventory.stock.name }}{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  .table thead th {
+    color: #1a3b50;
+    font-weight: 600;
+    border-bottom: 2px solid #1a3b50;
+    background: #f8f9fa;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-outline-secondary {
+    border-color: #6c757d;
+    color: #6c757d;
+  }
+  .btn-outline-secondary:hover {
+    background-color: #6c757d;
+    color: white;
+  }
+  .btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+  }
+  .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+  .alert-info {
+    background-color: #e3f2fd;
+    border-color: #1a3b50;
+    color: #1a3b50;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start !important;
+    }
+    
+    .btn-group {
+      flex-direction: column;
+      width: 100%;
+    }
+    
+    .btn-group > * {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    
+    .table-responsive {
+      font-size: 0.875rem;
+    }
+    
+    .table th, .table td {
+      padding: 0.5rem 0.25rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .table th, .table td {
+      padding: 0.375rem 0.125rem;
+      font-size: 0.8rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('stocks') }}">Stocks</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('inventories_list') }}">Inventaires</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Détails</li>
+    </ol>
+  </nav>
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h1 class="page-title">Inventaire - {{ inventory.stock.name }} ({{ inventory.stock.code }})</h1>
+      <p class="text-muted mb-0 mt-2">
+        Date : {{ inventory.created_at.strftime("%d/%m/%Y %H:%M") }} · 
+        Utilisateur : {{ inventory.user.username }}
+      </p>
+    </div>
+    <div class="btn-group">
+    <a href="{{ url_for('export_inventories') }}" class="btn btn-success" title="Exporter en Excel">📊 Export Excel</a>
+    {% if current_user.user_type == 'admin' %}
+    <a href="{{ url_for('edit_inventory', inventory_id=inventory.id) }}" class="btn btn-outline-secondary" title="Modifier">✏️ Modifier</a>
+    <form method="post" action="{{ url_for('delete_inventory', inventory_id=inventory.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cet inventaire ? Cette action restaurera les quantités précédentes et est irréversible.');">
+      <button type="submit" class="btn btn-outline-danger" title="Supprimer">🗑️ Supprimer</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if inventory.items %}
+<div class="table-responsive mt-3">
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Produit</th>
+        <th>Code</th>
+        <th>Quantité précédente</th>
+        <th>Nouvelle quantité</th>
+        <th>Différence</th>
+        <th>Commentaire</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in inventory.items %}
+      <tr>
+        <td>{{ item.product.name }}</td>
+        <td>{{ item.product.code }}</td>
+        <td>
+          <span class="badge bg-secondary">{{ "%.2f"|format(item.previous_quantity) }}</span>
+        </td>
+        <td>
+          <span class="badge {% if item.new_quantity > item.previous_quantity %}bg-success{% elif item.new_quantity < item.previous_quantity %}bg-danger{% else %}bg-info{% endif %}">
+            {{ "%.2f"|format(item.new_quantity) }}
+          </span>
+        </td>
+        <td>
+          {% set diff = item.new_quantity - item.previous_quantity %}
+          <span class="badge {% if diff > 0 %}bg-success{% elif diff < 0 %}bg-danger{% else %}bg-secondary{% endif %}">
+            {% if diff > 0 %}+{% endif %}{{ "%.2f"|format(diff) }}
+          </span>
+        </td>
+        <td>{{ item.comment or "-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info mt-3" style="background-color: #e3f2fd; border-color: #1a3b50; color: #1a3b50;">
+  <p class="mb-0">Aucune modification enregistrée pour cet inventaire.</p>
+</div>
+{% endif %}
+
+<div class="mt-3">
+  <a href="{{ url_for('inventories_list') }}" class="btn btn-secondary">Retour à la liste</a>
+</div>
+{% endblock %}
+
+
+
+

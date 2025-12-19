@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Nouvel utilisateur{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .form-label {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .form-control, .form-select {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+    font-weight: 500;
+  }
+  .btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #5a6268;
+    color: white;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .btn-success, .btn-secondary {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('users') }}">Utilisateurs</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Nouvel utilisateur</li>
+    </ol>
+  </nav>
+  <h1 class="page-title">Créer un utilisateur</h1>
+</div>
+
+<div class="form-card">
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Identifiant</label>
+    <input class="form-control" type="text" name="username" required autofocus />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Mot de passe</label>
+    <input class="form-control" type="password" name="password" required />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Type</label>
+    <select class="form-select" name="user_type" required>
+      <option value="">Sélectionnez un type...</option>
+      <option value="admin">Admin</option>
+      <option value="gestionnaire">Gestionnaire</option>
+      <option value="spectateur">Spectateur</option>
+      <option value="technicien">Technicien</option>
+    </select>
+  </div>
+  <div class="mt-4">
+    <button class="btn btn-success">Créer</button>
+    <a class="btn btn-secondary" href="{{ url_for('users') }}">Annuler</a>
+  </div>
+</form>
+</div>
+{% endblock %}
+

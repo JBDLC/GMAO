@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Modifier{% else %}Remplir{% endif %} {{ report.name }}{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .form-label {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .form-control, .form-select {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-outline-secondary {
+    border-color: #1a3b50;
+    color: #1a3b50;
+    font-weight: 500;
+  }
+  .btn-outline-secondary:hover {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+  }
+  hr {
+    border-color: #e0e0e0;
+    margin: 1.5rem 0;
+  }
+  h4 {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  .alert-info {
+    background-color: #e3f2fd;
+    border-color: #1a3b50;
+    color: #1a3b50;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .btn-success, .btn-outline-secondary {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    
+    .row.g-2 > [class*="col-"] {
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+    
+    .row.g-2 > [class*="col-"] {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('machines') }}">Machines</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('machine_detail', machine_id=machine.id) }}">{{ machine.name }}</a></li>
+      {% if is_edit %}
+      <li class="breadcrumb-item"><a href="{{ url_for('maintenance_entry_detail', entry_id=entry.id) }}">Rapport</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Modifier {{ report.name }}</li>
+      {% else %}
+      <li class="breadcrumb-item active" aria-current="page">Remplir {{ report.name }}</li>
+      {% endif %}
+    </ol>
+  </nav>
+  <h1 class="page-title">{{ report.name }}</h1>
+  <p class="text-muted mt-2">Machine : {{ machine.name }} ({{ machine.code }}) · Périodicité {{ report.periodicity }} h</p>
+</div>
+
+<div class="form-card">
+<form method="post" id="maintenanceFillForm" enctype="multipart/form-data">
+  {% for component in report.components %}
+  <div class="mb-3">
+    <label class="form-label">{{ component.label }}</label>
+    {% set existing_value = existing_values.get(component.id) if existing_values else None %}
+    {% if component.field_type == "number" %}
+    <input class="form-control" type="number" step="0.01" name="component_{{ component.id }}" value="{% if existing_value %}{{ existing_value.value_number }}{% endif %}" required />
+    {% elif component.field_type == "text" %}
+    <textarea class="form-control" name="component_{{ component.id }}" rows="2" required>{% if existing_value %}{{ existing_value.value_text }}{% endif %}</textarea>
+    {% else %}
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" value="on" id="component{{ component.id }}" name="component_{{ component.id }}" {% if existing_value and existing_value.value_bool %}checked{% endif %} />
+      <label class="form-check-label" for="component{{ component.id }}">Marquer comme validé</label>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <hr />
+  <div class="mb-3">
+    <label class="form-label">Nombre d'heures</label>
+    <input class="form-control" type="number" step="0.1" min="0" name="performed_hours" 
+           value="{% if is_edit and entry and entry.performed_hours %}{{ entry.performed_hours }}{% elif machine.hours %}{{ machine.hours }}{% endif %}" 
+           placeholder="Nombre d'heures de la maintenance" />
+    <small class="form-text text-muted">Heures au moment de la maintenance</small>
+  </div>
+
+  <hr />
+  <h4>Sortie de stock associée <small class="text-muted">(optionnel)</small></h4>
+  {% if stocks %}
+  <div class="mb-3">
+    <label class="form-label">Stock concerné</label>
+    <select class="form-select" name="stock_id">
+      <option value="">Aucun stock (optionnel)</option>
+      {% for stock in stocks %}
+      <option value="{{ stock.id }}" {% if (is_edit and entry.stock_id == stock.id) or (not is_edit and default_stock_id and stock.id == default_stock_id) %}selected{% endif %}>{{ stock.name }} ({{ stock.code }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Produits à retirer</label>
+    <input class="form-control mb-2" type="text" placeholder="Recherche produit" id="stockProductSearch" />
+    <div id="stockProductRows">
+      {% if is_edit and entry.stock %}
+        {# Note: On ne peut pas facilement récupérer les anciens produits dans le template,
+           donc on va créer une ligne vide et laisser l'utilisateur les ré-ajouter #}
+      {% endif %}
+      <div class="row g-2 mb-2 stock-product-row">
+        <div class="col-md-6">
+          <select class="form-select stock-product-select" name="stock_product_id">
+            <option value="">Produit...</option>
+            {% for product in products %}
+            <option value="{{ product.id }}" data-search="{{ (product.name ~ ' ' ~ product.code)|lower }}">
+              {{ product.name }} ({{ product.code }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <input class="form-control" type="number" min="1" step="1" name="stock_product_qty" placeholder="Quantité" />
+        </div>
+        <div class="col-md-3">
+          <span class="stock-quantity-info text-muted small d-block mt-2" style="display: none !important;">
+            <span class="stock-quantity-value"></span> disponible(s)
+          </span>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm mt-2" type="button" id="addStockProduct">+ Produit</button>
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    Aucun stock disponible. La sortie de stock est optionnelle, vous pouvez enregistrer le rapport sans.
+  </div>
+  {% endif %}
+
+  <hr />
+  <h4>Photos <small class="text-muted">(optionnel)</small></h4>
+  <div class="mb-3">
+    <label class="form-label">Ajouter des photos</label>
+    <input class="form-control" type="file" name="photos" multiple accept="image/*" />
+    <small class="form-text text-muted">Formats acceptés : JPG, PNG, GIF, WEBP. Vous pouvez sélectionner plusieurs photos.</small>
+  </div>
+
+  <button class="btn btn-success mt-3">{% if is_edit %}Modifier le rapport{% else %}Enregistrer le rapport{% endif %}</button>
+</form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const stockRows = document.getElementById("stockProductRows");
+  const addStockBtn = document.getElementById("addStockProduct");
+  const stockSearch = document.getElementById("stockProductSearch");
+
+  function filterStockOptions(query) {
+    if (!stockRows) return;
+    const selects = stockRows.querySelectorAll("select");
+    selects.forEach((select) => {
+      select.querySelectorAll("option").forEach((option) => {
+        if (!option.value) return;
+        const searchable = option.dataset.search || option.textContent.toLowerCase();
+        option.hidden = query && !searchable.includes(query);
+      });
+    });
+  }
+
+  if (addStockBtn && stockRows) {
+    addStockBtn.addEventListener("click", () => {
+      const template = stockRows.querySelector(".stock-product-row");
+      if (!template) return;
+      const clone = template.cloneNode(true);
+      clone.querySelectorAll("select, input").forEach((el) => (el.value = ""));
+      stockRows.appendChild(clone);
+      const query = stockSearch ? stockSearch.value.trim().toLowerCase() : "";
+      filterStockOptions(query);
+    });
+  }
+
+  if (stockSearch) {
+    stockSearch.addEventListener("input", () => {
+      const query = stockSearch.value.trim().toLowerCase();
+      filterStockOptions(query);
+    });
+  }
+
+  // Fonction pour mettre à jour la quantité disponible
+  function updateStockQuantity(stockSelect, quantityInfo) {
+    const stockId = document.querySelector('select[name="stock_id"]').value;
+    const productId = stockSelect.value;
+    
+    if (!stockId || !productId) {
+      quantityInfo.style.display = 'none';
+      return;
+    }
+    
+    fetch(`/api/stock/${stockId}/product/${productId}/quantity`)
+      .then(response => response.json())
+      .then(data => {
+        const quantitySpan = quantityInfo.querySelector('.stock-quantity-value');
+        quantitySpan.textContent = data.quantity;
+        quantityInfo.style.display = 'block';
+        if (data.quantity === 0) {
+          quantityInfo.classList.add('text-danger');
+          quantityInfo.classList.remove('text-muted');
+        } else {
+          quantityInfo.classList.remove('text-danger');
+          quantityInfo.classList.add('text-muted');
+        }
+      })
+      .catch(error => {
+        console.error('Erreur lors de la récupération de la quantité:', error);
+        quantityInfo.style.display = 'none';
+      });
+  }
+
+  // Écouter les changements de stock et de produit
+  const stockSelect = document.querySelector('select[name="stock_id"]');
+  if (stockSelect) {
+    stockSelect.addEventListener('change', () => {
+      // Mettre à jour toutes les quantités affichées
+      stockRows.querySelectorAll('.stock-product-row').forEach(row => {
+        const productSelect = row.querySelector('.stock-product-select');
+        const quantityInfo = row.querySelector('.stock-quantity-info');
+        if (productSelect && productSelect.value && quantityInfo) {
+          updateStockQuantity(productSelect, quantityInfo);
+        } else if (quantityInfo) {
+          quantityInfo.style.display = 'none';
+        }
+      });
+    });
+  }
+
+  // Écouter les changements de produit dans chaque ligne
+  if (stockRows) {
+    stockRows.addEventListener('change', (e) => {
+      if (e.target.classList.contains('stock-product-select')) {
+        const row = e.target.closest('.stock-product-row');
+        const quantityInfo = row.querySelector('.stock-quantity-info');
+        if (quantityInfo) {
+          updateStockQuantity(e.target, quantityInfo);
+        }
+      }
+    });
+    
+    // Initialiser les quantités pour les produits déjà sélectionnés
+    stockRows.querySelectorAll('.stock-product-row').forEach(row => {
+      const productSelect = row.querySelector('.stock-product-select');
+      const quantityInfo = row.querySelector('.stock-quantity-info');
+      if (productSelect && productSelect.value && quantityInfo) {
+        updateStockQuantity(productSelect, quantityInfo);
+      }
+    });
+  }
+</script>
+{% endblock %}
+

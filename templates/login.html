@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connexion - FMS</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Montserrat', sans-serif !important;
+      }
+      html, body {
+        height: 100vh;
+        width: 100vw;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      body {
+        background-color: #f8f9fa;
+        font-family: 'Montserrat', sans-serif;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        animation: fadeIn 0.5s ease-in;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes fadeOut {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+      body.fade-out {
+        animation: fadeOut 0.5s ease-out forwards;
+      }
+      .logo-container {
+        text-align: center;
+        margin-bottom: clamp(15px, 3vh, 40px);
+        flex-shrink: 0;
+        animation: fadeIn 0.5s ease-in 0.05s both;
+      }
+      .logo-container img {
+        max-width: clamp(200px, 20vw, 500px);
+        max-height: 30vh;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+      }
+      .login-container {
+        width: 100%;
+        max-width: clamp(320px, 90vw, 450px);
+        padding: clamp(10px, 2vh, 20px) clamp(10px, 2vw, 20px);
+        flex-shrink: 0;
+        animation: fadeIn 0.5s ease-in 0.1s both;
+      }
+      .login-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: clamp(30px, 5vh, 50px) clamp(30px, 4vw, 50px);
+      }
+      .form-label {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 8px;
+      }
+      .form-control {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: clamp(10px, 1.8vh, 14px) clamp(10px, 1.5vw, 14px);
+        font-size: clamp(14px, 1.8vh, 16px);
+      }
+      .form-control:focus {
+        border-color: #1a3b50;
+        box-shadow: 0 0 0 0.2rem rgba(26, 59, 80, 0.25);
+      }
+      .btn-login {
+        background-color: #1a3b50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: clamp(12px, 2vh, 16px);
+        font-weight: 500;
+        font-size: clamp(14px, 1.8vh, 16px);
+        width: 100%;
+        margin-top: clamp(10px, 1.5vh, 15px);
+        transition: background-color 0.2s;
+      }
+      .btn-login:hover {
+        background-color: #03192f;
+        color: white;
+      }
+      .alert {
+        border-radius: 4px;
+        margin-bottom: 20px;
+      }
+      .help-text {
+        text-align: center;
+        margin-top: clamp(15px, 2.5vh, 25px);
+        font-size: clamp(11px, 1.4vh, 13px);
+        color: #6c757d;
+      }
+      .mb-3 {
+        margin-bottom: clamp(1rem, 2.5vh, 1.5rem) !important;
+      }
+      .form-label {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: clamp(6px, 1vh, 10px);
+        font-size: clamp(13px, 1.6vh, 15px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo-container">
+      <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo FMS" />
+    </div>
+    <div class="login-container">
+      <div class="login-card">
+        {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+          {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          {% endfor %}
+        {% endif %}
+        {% endwith %}
+        
+        <form method="post" id="loginForm">
+          <div class="mb-3">
+            <label class="form-label" for="username">Identifiant</label>
+            <input 
+              class="form-control" 
+              type="text" 
+              name="username" 
+              id="username"
+              required 
+              autofocus 
+              placeholder="Entrez votre identifiant"
+            />
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="password">Mot de passe</label>
+            <input 
+              class="form-control" 
+              type="password" 
+              name="password" 
+              id="password"
+              required 
+              placeholder="Entrez votre mot de passe"
+            />
+          </div>
+          <button class="btn btn-login" type="submit">Se connecter</button>
+        </form>
+        <div class="help-text">
+          <p>Compte par défaut : admin123 / 123</p>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      document.getElementById('loginForm').addEventListener('submit', function(e) {
+        // Appliquer le fade-out avant la redirection
+        document.body.classList.add('fade-out');
+        // Laisser le temps au fade-out de se terminer avant la redirection
+        setTimeout(function() {
+          // La redirection se fera normalement après
+        }, 500);
+      });
+    </script>
+  </body>
+</html>

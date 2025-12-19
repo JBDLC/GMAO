@@ -1,0 +1,1082 @@
+{% extends "base.html" %}
+{% block title %}Machines{% endblock %}
+
+{% macro render_machine_node(node, level, color_index) %}
+  {% set has_children = node.children|length > 0 %}
+  <div class="machine-node tree-level-{{ level }} machine-color-{{ color_index }}" data-machine-id="{{ node.id }}">
+    <div class="machine-content">
+      <button 
+        type="button" 
+        class="machine-toggle {% if not has_children %}no-children{% endif %}" 
+        data-target="{{ node.id }}"
+        data-machine-id="{{ node.id }}">
+        {% if has_children %}+{% endif %}
+      </button>
+      
+      {% set status = machine_status.get(node.id) %}
+      <span class="machine-status {% if status == 'danger' %}danger{% elif status == 'warning' %}warning{% endif %}"></span>
+      
+      <div class="machine-info">
+        <a href="{{ url_for('machine_detail', machine_id=node.id) }}" class="machine-name">
+          {{ node.name }} <span class="machine-code">({{ node.code }})</span>
+        </a>
+        <div class="machine-badges">
+          {% if node.is_root() and node.counters %}
+            {% for counter in node.counters %}
+            <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+            {% endfor %}
+          {% elif node.hour_counter_enabled %}
+          <span class="badge-counter">{{ "%.1f"|format(node.hours) }} {{ node.counter_unit or 'h' }}</span>
+          {% endif %}
+        </div>
+      </div>
+      
+      <div class="machine-actions">
+        <button 
+          type="button" 
+          class="btn-action follow-btn {% if node.id in followed_machine_ids %}followed{% endif %}" 
+          data-machine-id="{{ node.id }}"
+          title="{% if node.id in followed_machine_ids %}{{ t('Ne plus suivre') }}{% else %}{{ t('Suivre cette machine') }}{% endif %}">
+          {% if node.id in followed_machine_ids %}★{% else %}☆{% endif %}
+        </button>
+        {% if level == 0 and current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(node) %}
+        <a href="{{ url_for('counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Relevé de compteur') }}">📊</a>
+        {% endif %}
+        {% if current_user.user_type == 'admin' %}
+        <a href="{{ url_for('edit_machine', machine_id=node.id) }}" class="btn-action" title="{{ t('Modifier') }}">✏️</a>
+        <form method="post" action="{{ url_for('delete_machine', machine_id=node.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.') }}');">
+          <button type="submit" class="btn-action" title="{{ t('Supprimer') }}">🗑️</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    
+    {% if has_children %}
+    <div class="machine-children collapsed" id="children-{{ node.id }}">
+      {% for child in node.children|sort(attribute='name') %}
+        {{ render_machine_node(child, child.depth(), color_index) }}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<style>
+  .machine-tree {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  
+  .machine-node {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    transition: background-color 0.2s ease;
+  }
+  
+  .machine-node:last-child {
+    border-bottom: none;
+  }
+  
+  .machine-node:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .machine-content {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    min-height: 56px;
+  }
+  
+  /* S'assurer qu'aucune machine n'a de fond blanc - toutes doivent avoir une couleur */
+  /* Les styles spécifiques avec machine-color-X définissent les couleurs avec !important */
+  
+  .machine-toggle {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid #1a3b50;
+    background: white;
+    color: #1a3b50;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-right: 12px;
+    flex-shrink: 0;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  
+  .machine-toggle:hover {
+    background: #1a3b50;
+    color: white;
+  }
+  
+  .machine-toggle.no-children {
+    visibility: hidden;
+  }
+  
+  .machine-indent {
+    width: 24px;
+    flex-shrink: 0;
+  }
+  
+  .machine-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 12px;
+    flex-shrink: 0;
+  }
+  
+  .machine-status.danger {
+    background-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.2);
+  }
+  
+  .machine-status.warning {
+    background-color: #ffc107;
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.2);
+  }
+  
+  .machine-info {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .machine-name {
+    font-weight: 500;
+    color: #1a3b50;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  
+  .machine-name:hover {
+    color: #03192f;
+  }
+  
+  .machine-code {
+    color: #6c757d;
+    font-size: 0.9em;
+  }
+  
+  .machine-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .badge-counter {
+    background-color: #1a3b50;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+  
+  .machine-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+    flex-shrink: 0;
+  }
+  
+  .btn-action {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    background: white;
+    color: #1a3b50;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  
+  .btn-action:hover {
+    background: #1a3b50;
+    color: white;
+    border-color: #1a3b50;
+  }
+  
+  .btn-action.follow-btn {
+    border-color: #ffc107;
+    color: #ffc107;
+  }
+  
+  .btn-action.follow-btn.followed {
+    background: #ffc107;
+    color: #000;
+    border-color: #ffc107;
+  }
+  
+  .btn-action.follow-btn:hover {
+    background: #ffc107;
+    color: #000;
+    border-color: #ffc107;
+  }
+  
+  .machine-children {
+    margin-left: 24px;
+    border-left: 2px solid #e9ecef;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+  }
+  
+  .machine-children.collapsed {
+    display: none;
+  }
+  
+  .machine-children.expanded {
+    display: block;
+  }
+  
+  /* Palette de 10 couleurs (sans bleu) avec dégradés pour chaque niveau */
+  /* Couleur 0 - Vert foncé */
+  .machine-color-0.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #2d5016 0%, #1e340f 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #1e340f 0%, #2d5016 100%) !important;
+  }
+  .machine-color-0.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #3d7026 0%, #2d5016 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #2d5016 0%, #3d7026 100%) !important;
+  }
+  .machine-color-0.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #4d9036 0%, #3d7026 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #3d7026 0%, #4d9036 100%) !important;
+  }
+  .machine-color-0.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #5db046 0%, #4d9036 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #4d9036 0%, #5db046 100%) !important;
+  }
+  .machine-color-0.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #6dd056 0%, #5db046 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #5db046 0%, #6dd056 100%) !important;
+  }
+  
+  /* Couleur 1 - Violet */
+  .machine-color-1.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #6a1b9a 0%, #4a148c 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #4a148c 0%, #6a1b9a 100%) !important;
+  }
+  .machine-color-1.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #6a1b9a 0%, #7b1fa2 100%) !important;
+  }
+  .machine-color-1.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%) !important;
+  }
+  .machine-color-1.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #ba68c8 0%, #9c27b0 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%) !important;
+  }
+  .machine-color-1.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ce93d8 0%, #ba68c8 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #ba68c8 0%, #ce93d8 100%) !important;
+  }
+  
+  /* Couleur 2 - Orange */
+  .machine-color-2.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #e65100 0%, #bf360c 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #bf360c 0%, #e65100 100%) !important;
+  }
+  .machine-color-2.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #ff6f00 0%, #e65100 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #e65100 0%, #ff6f00 100%) !important;
+  }
+  .machine-color-2.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ff8f00 0%, #ff6f00 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%) !important;
+  }
+  .machine-color-2.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #ffb300 0%, #ff8f00 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ff8f00 0%, #ffb300 100%) !important;
+  }
+  .machine-color-2.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%) !important;
+    color: #1a3b50 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #ffb300 0%, #ffc107 100%) !important;
+  }
+  
+  /* Couleur 3 - Rouge */
+  .machine-color-3.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #b71c1c 0%, #c62828 100%) !important;
+  }
+  .machine-color-3.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #e53935 0%, #c62828 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #c62828 0%, #e53935 100%) !important;
+  }
+  .machine-color-3.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ef5350 0%, #e53935 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #e53935 0%, #ef5350 100%) !important;
+  }
+  .machine-color-3.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #e57373 0%, #ef5350 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ef5350 0%, #e57373 100%) !important;
+  }
+  .machine-color-3.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ef9a9a 0%, #e57373 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #e57373 0%, #ef9a9a 100%) !important;
+  }
+  
+  /* Couleur 4 - Turquoise */
+  .machine-color-4.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #00695c 0%, #004d40 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #004d40 0%, #00695c 100%) !important;
+  }
+  .machine-color-4.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #00897b 0%, #00695c 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #00695c 0%, #00897b 100%) !important;
+  }
+  .machine-color-4.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #26a69a 0%, #00897b 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #00897b 0%, #26a69a 100%) !important;
+  }
+  .machine-color-4.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #4db6ac 0%, #26a69a 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #26a69a 0%, #4db6ac 100%) !important;
+  }
+  .machine-color-4.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #80cbc4 0%, #4db6ac 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #4db6ac 0%, #80cbc4 100%) !important;
+  }
+  
+  /* Couleur 5 - Rose */
+  .machine-color-5.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #c2185b 0%, #880e4f 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #880e4f 0%, #c2185b 100%) !important;
+  }
+  .machine-color-5.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #c2185b 0%, #e91e63 100%) !important;
+  }
+  .machine-color-5.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ec407a 0%, #e91e63 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #e91e63 0%, #ec407a 100%) !important;
+  }
+  .machine-color-5.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #f06292 0%, #ec407a 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ec407a 0%, #f06292 100%) !important;
+  }
+  .machine-color-5.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #f48fb1 0%, #f06292 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #f06292 0%, #f48fb1 100%) !important;
+  }
+  
+  /* Couleur 6 - Indigo */
+  .machine-color-6.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #283593 0%, #1a237e 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #1a237e 0%, #283593 100%) !important;
+  }
+  .machine-color-6.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #3949ab 0%, #283593 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #283593 0%, #3949ab 100%) !important;
+  }
+  .machine-color-6.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #3949ab 0%, #5c6bc0 100%) !important;
+  }
+  .machine-color-6.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #5c6bc0 0%, #7986cb 100%) !important;
+  }
+  .machine-color-6.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #9fa8da 0%, #7986cb 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #7986cb 0%, #9fa8da 100%) !important;
+  }
+  
+  /* Couleur 7 - Marron */
+  .machine-color-7.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #5d4037 0%, #3e2723 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #3e2723 0%, #5d4037 100%) !important;
+  }
+  .machine-color-7.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #795548 0%, #5d4037 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #5d4037 0%, #795548 100%) !important;
+  }
+  .machine-color-7.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #8d6e63 0%, #795548 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #795548 0%, #8d6e63 100%) !important;
+  }
+  .machine-color-7.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #a1887f 0%, #8d6e63 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #8d6e63 0%, #a1887f 100%) !important;
+  }
+  .machine-color-7.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #bcaaa4 0%, #a1887f 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #a1887f 0%, #bcaaa4 100%) !important;
+  }
+  
+  /* Couleur 8 - Vert menthe */
+  .machine-color-8.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #1b5e20 0%, #0d3e11 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #0d3e11 0%, #1b5e20 100%) !important;
+  }
+  .machine-color-8.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #388e3c 0%, #1b5e20 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #1b5e20 0%, #388e3c 100%) !important;
+  }
+  .machine-color-8.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #388e3c 0%, #4caf50 100%) !important;
+  }
+  .machine-color-8.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%) !important;
+  }
+  .machine-color-8.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #66bb6a 0%, #81c784 100%) !important;
+  }
+  
+  /* Couleur 9 - Ambre */
+  .machine-color-9.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #f57c00 0%, #e65100 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #e65100 0%, #f57c00 100%) !important;
+  }
+  .machine-color-9.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #ffa726 0%, #f57c00 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #f57c00 0%, #ffa726 100%) !important;
+  }
+  .machine-color-9.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ffb74d 0%, #ffa726 100%) !important;
+    color: white !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #ffa726 0%, #ffb74d 100%) !important;
+  }
+  .machine-color-9.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #ffcc80 0%, #ffb74d 100%) !important;
+    color: #1a3b50 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ffb74d 0%, #ffcc80 100%) !important;
+  }
+  .machine-color-9.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%) !important;
+    color: #1a3b50 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #ffcc80 0%, #ffe0b2 100%) !important;
+  }
+  
+  /* Réduction des indentations en mode portable */
+  @media (max-width: 768px) {
+    [class*="machine-color-"].tree-level-1 .machine-content {
+      padding-left: 20px;
+    }
+    
+    [class*="machine-color-"].tree-level-2 .machine-content {
+      padding-left: 28px;
+    }
+    
+    [class*="machine-color-"].tree-level-3 .machine-content {
+      padding-left: 36px;
+    }
+    
+    [class*="machine-color-"].tree-level-4 .machine-content {
+      padding-left: 44px;
+    }
+    
+    .machine-children {
+      margin-left: 12px;
+    }
+    
+    .machine-content {
+      padding: 10px 12px;
+      min-height: 48px;
+    }
+    
+    .machine-toggle {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      font-size: 12px;
+    }
+    
+    .machine-info {
+      font-size: 0.9rem;
+    }
+    
+    .machine-name {
+      font-size: 0.9rem;
+    }
+    
+    .badge-counter {
+      font-size: 0.75rem;
+      padding: 2px 6px;
+    }
+    
+    .btn-action {
+      width: 28px;
+      height: 28px;
+      font-size: 14px;
+      padding: 0;
+    }
+    
+    .machine-actions {
+      gap: 4px;
+      margin-left: 8px;
+    }
+  }
+  
+  /* Lignes blanches entre les niveaux enfants */
+  .machine-children {
+    border-left: 2px solid white;
+  }
+  
+  .machine-children .machine-node {
+    border-left: 2px solid transparent;
+    margin-left: 0;
+  }
+  
+  .machine-children .machine-node:hover {
+    border-left-color: white;
+  }
+  
+  /* Styles communs pour tous les niveaux avec couleurs */
+  [class*="machine-color-"].tree-level-0 .machine-name,
+  [class*="machine-color-"].tree-level-1 .machine-name,
+  [class*="machine-color-"].tree-level-2 .machine-name,
+  [class*="machine-color-"].tree-level-3 .machine-name,
+  [class*="machine-color-"].tree-level-4 .machine-name {
+    color: white;
+    font-weight: 600;
+  }
+  
+  [class*="machine-color-"].tree-level-2.machine-color-2 .machine-name,
+  [class*="machine-color-"].tree-level-3.machine-color-2 .machine-name,
+  [class*="machine-color-"].tree-level-4.machine-color-2 .machine-name,
+  [class*="machine-color-"].tree-level-3.machine-color-9 .machine-name,
+  [class*="machine-color-"].tree-level-4.machine-color-9 .machine-name {
+    color: #1a3b50;
+  }
+  
+  [class*="machine-color-"].tree-level-0 .machine-code,
+  [class*="machine-color-"].tree-level-1 .machine-code,
+  [class*="machine-color-"].tree-level-2 .machine-code,
+  [class*="machine-color-"].tree-level-3 .machine-code,
+  [class*="machine-color-"].tree-level-4 .machine-code {
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  [class*="machine-color-"].tree-level-2.machine-color-2 .machine-code,
+  [class*="machine-color-"].tree-level-3.machine-color-2 .machine-code,
+  [class*="machine-color-"].tree-level-4.machine-color-2 .machine-code,
+  [class*="machine-color-"].tree-level-3.machine-color-9 .machine-code,
+  [class*="machine-color-"].tree-level-4.machine-color-9 .machine-code {
+    color: rgba(26, 59, 80, 0.7);
+  }
+  
+  [class*="machine-color-"].tree-level-0 .badge-counter,
+  [class*="machine-color-"].tree-level-1 .badge-counter,
+  [class*="machine-color-"].tree-level-2 .badge-counter,
+  [class*="machine-color-"].tree-level-3 .badge-counter,
+  [class*="machine-color-"].tree-level-4 .badge-counter {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+  
+  [class*="machine-color-"].tree-level-0 .btn-action,
+  [class*="machine-color-"].tree-level-1 .btn-action,
+  [class*="machine-color-"].tree-level-2 .btn-action,
+  [class*="machine-color-"].tree-level-3 .btn-action,
+  [class*="machine-color-"].tree-level-4 .btn-action {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  [class*="machine-color-"].tree-level-0 .btn-action:hover,
+  [class*="machine-color-"].tree-level-1 .btn-action:hover,
+  [class*="machine-color-"].tree-level-2 .btn-action:hover,
+  [class*="machine-color-"].tree-level-3 .btn-action:hover,
+  [class*="machine-color-"].tree-level-4 .btn-action:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+  
+  [class*="machine-color-"].tree-level-0 .machine-status,
+  [class*="machine-color-"].tree-level-1 .machine-status,
+  [class*="machine-color-"].tree-level-2 .machine-status,
+  [class*="machine-color-"].tree-level-3 .machine-status,
+  [class*="machine-color-"].tree-level-4 .machine-status {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 style="color: #1a3b50; font-weight: 600;">{{ t('Arborescence des machines') }}</h2>
+  <div class="btn-group">
+    {% if current_user.user_type == 'admin' %}
+    <a class="btn btn-primary" href="{{ url_for('new_machine') }}" style="background-color: #1a3b50; border-color: #1a3b50;">+ Machine</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if roots %}
+<div class="machine-tree">
+  {% for root in roots %}
+    {% set root_has_children = root.children|length > 0 %}
+    {% set color_index = machine_color_map.get(root.id, 0) %}
+    <div class="machine-node tree-level-0 machine-color-{{ color_index }}" data-machine-id="{{ root.id }}">
+      <div class="machine-content">
+        <button 
+          type="button" 
+          class="machine-toggle {% if not root_has_children %}no-children{% endif %}" 
+          data-target="{{ root.id }}"
+          data-machine-id="{{ root.id }}">
+          {% if root_has_children %}+{% endif %}
+        </button>
+        
+        {% set status = machine_status.get(root.id) %}
+        <span class="machine-status {% if status == 'danger' %}danger{% elif status == 'warning' %}warning{% endif %}"></span>
+        
+        <div class="machine-info">
+          <a href="{{ url_for('machine_detail', machine_id=root.id) }}" class="machine-name">
+            {{ root.name }} <span class="machine-code">({{ root.code }})</span>
+          </a>
+          <div class="machine-badges">
+            {% if root.is_root() and root.counters %}
+              {% for counter in root.counters %}
+              <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+              {% endfor %}
+            {% elif root.hour_counter_enabled %}
+            <span class="badge-counter">{{ "%.1f"|format(root.hours) }} {{ root.counter_unit or 'h' }}</span>
+            {% endif %}
+          </div>
+        </div>
+        
+        <div class="machine-actions">
+          <button 
+            type="button" 
+            class="btn-action follow-btn {% if root.id in followed_machine_ids %}followed{% endif %}" 
+            data-machine-id="{{ root.id }}"
+            title="{% if root.id in followed_machine_ids %}Ne plus suivre{% else %}Suivre cette machine{% endif %}">
+            {% if root.id in followed_machine_ids %}★{% else %}☆{% endif %}
+          </button>
+          {% if current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(root) %}
+          <a href="{{ url_for('counter_report', machine_id=root.id) }}" class="btn-action" title="Relevé compteur">📊</a>
+          {% endif %}
+          {% if current_user.user_type == 'admin' %}
+          <a href="{{ url_for('edit_machine', machine_id=root.id) }}" class="btn-action" title="Modifier">✏️</a>
+          <form method="post" action="{{ url_for('delete_machine', machine_id=root.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.');">
+            <button type="submit" class="btn-action" title="Supprimer">🗑️</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      
+      {% if root_has_children %}
+      <div class="machine-children collapsed" id="children-{{ root.id }}">
+        {% for child in root.children|sort(attribute='name') %}
+          {{ render_machine_node(child, child.depth(), color_index) }}
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info" style="background-color: #e7f3ff; border-color: #1a3b50; color: #1a3b50;">
+  <strong>Aucune machine créée.</strong> Commencez par créer votre première machine.
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Fonction pour toggle une machine
+  function toggleMachine(button, machineId) {
+    console.log('Toggle machine:', machineId);
+    const childrenDiv = document.getElementById('children-' + machineId);
+    if (!childrenDiv) {
+      console.log('Children div not found for machine:', machineId);
+      return;
+    }
+    
+    const isCollapsed = childrenDiv.classList.contains('collapsed');
+    console.log('Is collapsed:', isCollapsed);
+    
+    if (isCollapsed) {
+      childrenDiv.classList.remove('collapsed');
+      childrenDiv.classList.add('expanded');
+      button.textContent = '−';
+    } else {
+      childrenDiv.classList.remove('expanded');
+      childrenDiv.classList.add('collapsed');
+      button.textContent = '+';
+    }
+  }
+  
+  // Attacher les listeners directement à tous les boutons toggle
+  function attachToggleListeners() {
+    document.querySelectorAll('.machine-toggle:not(.no-children)').forEach(button => {
+      // Vérifier si le listener est déjà attaché
+      if (!button.dataset.listenerAttached) {
+        button.dataset.listenerAttached = 'true';
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const machineId = this.getAttribute('data-target') || this.getAttribute('data-machine-id');
+          console.log('Button clicked, machineId:', machineId, 'Button:', this);
+          if (machineId) {
+            toggleMachine(this, machineId);
+          }
+        });
+      }
+    });
+  }
+  
+  // Attacher les listeners au chargement
+  attachToggleListeners();
+  
+  // Observer les changements DOM pour attacher les listeners aux nouveaux éléments
+  const observer = new MutationObserver(function(mutations) {
+    attachToggleListeners();
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+  
+  // Initialiser les boutons de suivi
+  const followButtons = document.querySelectorAll('.follow-btn');
+  
+  followButtons.forEach(button => {
+    button.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const machineId = this.getAttribute('data-machine-id');
+      
+      this.disabled = true;
+      
+      fetch(`/machines/${machineId}/toggle-follow`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          if (data.is_followed) {
+            this.innerHTML = '★';
+            this.classList.add('followed');
+            this.title = '{{ t('Ne plus suivre') }}';
+          } else {
+            this.innerHTML = '☆';
+            this.classList.remove('followed');
+            this.title = '{{ t('Suivre cette machine') }}';
+          }
+        } else {
+          alert('{{ t('Erreur') }} : ' + (data.error || '{{ t('Impossible de modifier le suivi') }}'));
+        }
+      })
+      .catch(error => {
+        console.error('Erreur:', error);
+        alert('Erreur lors de la modification du suivi');
+      })
+      .finally(() => {
+        this.disabled = false;
+      });
+    });
+  });
+  
+});
+</script>
+{% endblock %}

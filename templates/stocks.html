@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Stocks{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .stock-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #1a3b50;
+    transition: all 0.2s;
+  }
+  .stock-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+  }
+  .stock-card a {
+    color: #1a3b50;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .stock-card a:hover {
+    color: #03192f;
+  }
+  .btn-primary {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-primary:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-info {
+    background-color: #0dcaf0;
+    border-color: #0dcaf0;
+    color: #1a3b50;
+    font-weight: 600;
+  }
+  .btn-info:hover {
+    background-color: #0aa2c0;
+    border-color: #0aa2c0;
+    color: #1a3b50;
+  }
+  .btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+  }
+  .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start !important;
+    }
+    
+    .btn-primary {
+      width: 100%;
+    }
+    
+    .stock-card {
+      padding: 1rem;
+    }
+    
+    .stock-card .d-flex.justify-content-between {
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    
+    .btn-group {
+      width: 100%;
+      flex-direction: column;
+    }
+    
+    .btn-group .btn {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .stock-card {
+      padding: 0.75rem;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">{{ t('Stocks') }}</h1>
+    {% if current_user.user_type == 'admin' %}
+    <a class="btn btn-primary" href="{{ url_for('new_stock') }}">{{ t('+ Stock') }}</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if stocks %}
+<div class="mt-3">
+  {% for stock in stocks %}
+  <div class="stock-card d-flex justify-content-between align-items-center">
+    <a href="{{ url_for('manage_stock', stock_id=stock.id) }}" class="text-decoration-none flex-grow-1">
+      <div class="d-flex justify-content-between">
+        <span>{{ stock.name }}{% if main_stock_id == stock.id %}*{% endif %} ({{ stock.code }})</span>
+        <small>{{ stock.items|length }} {{ t('produits') }}</small>
+      </div>
+    </a>
+    <div class="btn-group ms-2">
+      <a href="{{ url_for('create_inventory', stock_id=stock.id) }}" class="btn btn-sm btn-info" title="{{ t('Inventaire') }}">📋 {{ t('Inventaire') }}</a>
+      {% if current_user.user_type == 'admin' %}
+      <form method="post" action="{{ url_for('delete_stock', stock_id=stock.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce stock ? Cette action est irréversible.') }}');">
+        <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer le stock') }}">🗑️</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info mt-3" style="background-color: #e3f2fd; border-color: #1a3b50; color: #1a3b50;">
+  <p class="mb-0">{{ t('Aucun stock.') }}</p>
+</div>
+{% endif %}
+{% endblock %}
+

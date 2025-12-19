@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}Nouveau rapport{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .form-label {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .form-control, .form-select {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.2s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: #1a3b50;
+    box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
+    outline: none;
+  }
+  .component-row {
+    background: #f8f9fa;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    border-left: 3px solid #1a3b50;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .btn-outline-secondary {
+    border-color: #1a3b50;
+    color: #1a3b50;
+    font-weight: 500;
+  }
+  .btn-outline-secondary:hover {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+  }
+  .btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+  }
+  .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+  hr {
+    border-color: #e0e0e0;
+    margin: 1.5rem 0;
+  }
+  h4 {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .form-card {
+      padding: 1.25rem;
+    }
+    
+    .row.g-3 > [class*="col-"] {
+      margin-bottom: 1rem;
+    }
+    
+    .btn-success, .btn-outline-secondary {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    
+    .component-row {
+      padding: 0.5rem;
+    }
+    
+    .component-row .row > [class*="col-"] {
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1rem;
+    }
+    
+    .row.g-3 > [class*="col-"],
+    .component-row .row > [class*="col-"] {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <h1 class="page-title">Créer un modèle de maintenance préventive</h1>
+</div>
+
+<div class="form-card">
+<form method="post" id="maintenanceForm">
+  <div class="mb-3">
+    <label class="form-label">Machine</label>
+    <select class="form-select" name="machine_id" id="machineSelect" required>
+      <option value="">Sélectionnez une machine...</option>
+      {% for machine in machines %}
+      <option value="{{ machine.id }}" {% if selected_machine_id == machine.id %}selected{% endif %}>
+        {{ machine.name }} ({{ machine.code }})
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3 d-none" id="counterSelectContainer">
+    <label class="form-label">Compteur de référence pour la périodicité <span class="text-danger" id="counterRequired">*</span></label>
+    <select class="form-select" name="counter_id" id="counterSelect">
+      <option value="">Sélectionnez un compteur...</option>
+    </select>
+    <small class="form-text text-muted">Choisissez le compteur auquel se réfère la périodicité de ce modèle. Vous pouvez choisir le compteur de la machine/sous-machine ou un compteur de la machine racine.</small>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Nom du rapport</label>
+    <input class="form-control" name="name" required />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Périodicité</label>
+    <input class="form-control" type="number" min="1" name="periodicity" required />
+  </div>
+  <hr />
+  <h4>Éléments du rapport</h4>
+  {% if all_reports %}
+  <div class="mb-3">
+    <label class="form-label">Charger depuis un modèle existant (optionnel)</label>
+    <select class="form-select" id="loadFromTemplate" onchange="loadTemplateComponents(this.value)">
+      <option value="">Sélectionner un modèle pour pré-remplir les éléments...</option>
+      {% for report in all_reports %}
+      <option value="{{ report.id }}">{{ report.name }} ({{ report.machine.name }})</option>
+      {% endfor %}
+    </select>
+    <small class="form-text text-muted">Sélectionnez un modèle existant pour pré-remplir les éléments. Vous pourrez ensuite les modifier ou en ajouter d'autres.</small>
+  </div>
+  {% endif %}
+  <div id="componentRows">
+    <div class="row g-2 mb-2 component-row">
+      <div class="col-md-7">
+        <input class="form-control" name="component_label" placeholder="Intitulé" required />
+      </div>
+      <div class="col-md-4">
+        <select class="form-select" name="component_type" required>
+          <option value="">Type...</option>
+          <option value="number">Nombre</option>
+          <option value="text">Texte</option>
+          <option value="checkbox">Tick box</option>
+        </select>
+      </div>
+      <div class="col-md-1 d-flex align-items-center">
+        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-component" title="Supprimer cet élément">
+          🗑️
+        </button>
+      </div>
+    </div>
+  </div>
+  <button class="btn btn-outline-secondary btn-sm mb-3" type="button" id="addComponent">+ Élément</button>
+  <div class="mt-4">
+    <button class="btn btn-success">Enregistrer</button>
+  </div>
+</form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const rows = document.getElementById("componentRows");
+  const addComponentBtn = document.getElementById("addComponent");
+
+  addComponentBtn.addEventListener("click", () => {
+    const template = rows.querySelector(".component-row");
+    const clone = template.cloneNode(true);
+    // Réinitialiser les valeurs des champs du clone
+    clone.querySelectorAll("input, select").forEach((el) => (el.value = ""));
+    rows.appendChild(clone);
+  });
+
+  // Suppression d'un élément du rapport
+  rows.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target.closest(".btn-remove-component")) {
+      const row = target.closest(".component-row");
+      const allRows = rows.querySelectorAll(".component-row");
+      if (allRows.length > 1) {
+        row.remove();
+      } else {
+        // S'il ne reste qu'une ligne, on la vide simplement
+        row.querySelectorAll("input, select").forEach((el) => (el.value = ""));
+      }
+    }
+  });
+  
+  // Gestion de l'affichage du sélecteur de compteur
+  const machineSelect = document.getElementById("machineSelect");
+  const counterSelectContainer = document.getElementById("counterSelectContainer");
+  const counterSelect = document.getElementById("counterSelect");
+  
+  async function updateCounterSelect() {
+    const machineId = machineSelect.value;
+    
+    if (!machineId) {
+      counterSelectContainer.classList.add("d-none");
+      counterSelect.innerHTML = '<option value="">Sélectionnez un compteur...</option>';
+      counterSelect.removeAttribute("required");
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/machine/${machineId}/available-counters`);
+      const data = await response.json();
+      const counters = data.counters;
+      
+      if (counters && counters.length > 0) {
+        counterSelectContainer.classList.remove("d-none");
+        counterSelect.innerHTML = '<option value="">Sélectionnez un compteur...</option>';
+        
+        // Vérifier si la machine a son propre compteur
+        const hasMachineCounter = counters.some(c => c.type === "machine");
+        
+        counters.forEach(counter => {
+          const option = document.createElement("option");
+          // Si counter.id est null, on utilise une valeur spéciale pour indiquer le compteur de la machine
+          option.value = counter.id === null ? "machine" : counter.id;
+          option.textContent = counter.name + ` (${counter.value} ${counter.unit})`;
+          counterSelect.appendChild(option);
+        });
+        
+        // Si la machine n'a pas de compteur, le sélecteur de compteur est obligatoire
+        if (!hasMachineCounter) {
+          counterSelect.setAttribute("required", "required");
+          document.getElementById("counterRequired").style.display = "inline";
+        } else {
+          counterSelect.removeAttribute("required");
+          document.getElementById("counterRequired").style.display = "none";
+        }
+      } else {
+        counterSelectContainer.classList.add("d-none");
+        counterSelect.innerHTML = '<option value="">Aucun compteur disponible</option>';
+        counterSelect.removeAttribute("required");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des compteurs:", error);
+      counterSelectContainer.classList.add("d-none");
+      counterSelect.removeAttribute("required");
+    }
+  }
+  
+  machineSelect.addEventListener("change", updateCounterSelect);
+  
+  // Initialiser au chargement si une machine est déjà sélectionnée
+  if (machineSelect.value) {
+    updateCounterSelect();
+  }
+  
+  // Fonction pour charger les composants d'un modèle existant
+  async function loadTemplateComponents(reportId) {
+    if (!reportId) return;
+    
+    try {
+      const response = await fetch(`/api/maintenance-report/${reportId}/components`);
+      const data = await response.json();
+      
+      if (data.success && data.components && data.components.length > 0) {
+        // Vider les lignes existantes sauf la première
+        const componentRows = document.getElementById("componentRows");
+        const existingRows = componentRows.querySelectorAll(".component-row");
+        existingRows.forEach((row, index) => {
+          if (index > 0) {
+            row.remove();
+          } else {
+            // Vider la première ligne
+            row.querySelectorAll("input, select").forEach((el) => (el.value = ""));
+          }
+        });
+        
+        // Ajouter les composants du modèle
+        data.components.forEach((component, index) => {
+          let row;
+          if (index === 0) {
+            // Utiliser la première ligne existante
+            row = componentRows.querySelector(".component-row");
+          } else {
+            // Cloner la première ligne pour les autres
+            const template = componentRows.querySelector(".component-row");
+            row = template.cloneNode(true);
+            componentRows.appendChild(row);
+          }
+          
+          // Remplir les champs
+          const labelInput = row.querySelector('input[name="component_label"]');
+          const typeSelect = row.querySelector('select[name="component_type"]');
+          
+          if (labelInput) labelInput.value = component.label;
+          if (typeSelect) typeSelect.value = component.field_type;
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement du modèle:", error);
+      alert("Erreur lors du chargement du modèle");
+    }
+  }
+  
+  // Exposer la fonction globalement
+  window.loadTemplateComponents = loadTemplateComponents;
+</script>
+{% endblock %}
+

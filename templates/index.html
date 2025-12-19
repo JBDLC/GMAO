@@ -1,0 +1,1846 @@
+{% extends "base.html" %}
+{% block title %}Accueil-FMS{% endblock %}
+
+{% macro render_machine_node(node, level, color_index) %}
+  {% set has_children = node.children|length > 0 %}
+  {% set is_followed = node.id in followed_machine_ids %}
+  
+  <div class="machine-node tree-level-{{ level }} machine-color-{{ color_index }} {% if not is_followed %}not-followed machine-not-followed{% endif %}" data-machine-id="{{ node.id }}" {% if not is_followed %}style="display: none;"{% endif %}>
+    <div class="machine-content">
+      <button 
+        type="button" 
+        class="machine-toggle {% if not has_children %}no-children{% endif %}" 
+        data-target="{{ node.id }}"
+        data-machine-id="{{ node.id }}">
+        {% if has_children %}+{% endif %}
+      </button>
+      
+      {% set status = machine_status.get(node.id) %}
+      <span class="machine-status {% if status == 'danger' %}danger{% elif status == 'warning' %}warning{% endif %}"></span>
+      
+      <div class="machine-info">
+        <a href="{{ url_for('machine_detail', machine_id=node.id) }}" class="machine-name">
+          {{ node.name }} <span class="machine-code">({{ node.code }})</span>
+        </a>
+        <div class="machine-badges">
+          {% if node.is_root() and node.counters %}
+            {% for counter in node.counters %}
+            <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+            {% endfor %}
+          {% elif node.hour_counter_enabled %}
+          <span class="badge-counter">{{ "%.1f"|format(node.hours) }} {{ node.counter_unit or 'h' }}</span>
+          {% endif %}
+        </div>
+      </div>
+      
+      <div class="machine-actions">
+        <button 
+          type="button" 
+          class="btn-action follow-btn {% if is_followed %}followed{% endif %}" 
+          data-machine-id="{{ node.id }}"
+          title="{% if is_followed %}Ne plus suivre{% else %}Suivre cette machine{% endif %}">
+          {% if is_followed %}★{% else %}☆{% endif %}
+        </button>
+        {% if level == 0 and current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(node) %}
+        <a href="{{ url_for('counter_report', machine_id=node.id) }}" class="btn-action" title="Relevé compteur">📊</a>
+        {% endif %}
+        {% if current_user.user_type == 'admin' %}
+        <a href="{{ url_for('edit_machine', machine_id=node.id) }}" class="btn-action" title="Modifier">✏️</a>
+        <form method="post" action="{{ url_for('delete_machine', machine_id=node.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.');">
+          <button type="submit" class="btn-action" title="Supprimer">🗑️</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    
+    {% if has_children %}
+    <div class="machine-children {% if is_followed %}expanded{% else %}collapsed{% endif %}" id="children-{{ node.id }}">
+      {% for child in node.children|sort(attribute='name') %}
+        {{ render_machine_node(child, child.depth(), color_index) }}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='machines.css') if False else '' }}">
+<style>
+  /* Copier les styles de machines.html */
+  .machine-tree {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  
+  .machine-node {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    transition: background-color 0.2s ease;
+  }
+  
+  .machine-node:last-child {
+    border-bottom: none;
+  }
+  
+  .machine-node:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .machine-node.not-followed {
+    opacity: 0.6;
+  }
+  
+  .machine-content {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    min-height: 56px;
+  }
+  
+  .machine-toggle {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid #1a3b50;
+    background: white;
+    color: #1a3b50;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-right: 12px;
+    flex-shrink: 0;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  
+  .machine-toggle:hover {
+    background: #1a3b50;
+    color: white;
+  }
+  
+  .machine-toggle.no-children {
+    visibility: hidden;
+  }
+  
+  .machine-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 12px;
+    flex-shrink: 0;
+  }
+  
+  .machine-status.danger {
+    background-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.2);
+  }
+  
+  .machine-status.warning {
+    background-color: #ffc107;
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.2);
+  }
+  
+  .machine-info {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .machine-name {
+    font-weight: 500;
+    color: #1a3b50;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  
+  .machine-name:hover {
+    color: #03192f;
+  }
+  
+  .machine-code {
+    color: #6c757d;
+    font-size: 0.9em;
+  }
+  
+  .machine-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .badge-counter {
+    background-color: #1a3b50;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+  
+  .machine-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+    flex-shrink: 0;
+  }
+  
+  .btn-action {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    background: white;
+    color: #1a3b50;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  
+  .btn-action:hover {
+    background: #1a3b50;
+    color: white;
+    border-color: #1a3b50;
+  }
+  
+  .btn-action.follow-btn {
+    border-color: #ffc107;
+    color: #ffc107;
+  }
+  
+  .btn-action.follow-btn.followed {
+    background: #ffc107;
+    color: #000;
+    border-color: #ffc107;
+  }
+  
+  .btn-action.follow-btn:hover {
+    background: #ffc107;
+    color: #000;
+    border-color: #ffc107;
+  }
+  
+  .machine-children {
+    margin-left: 24px;
+    border-left: 2px solid white;
+    overflow: hidden;
+  }
+  
+  .machine-children.collapsed {
+    display: none !important;
+  }
+  
+  .machine-children.expanded {
+    display: block !important;
+  }
+  
+  /* Palette de 10 couleurs (sans bleu) avec dégradés pour chaque niveau */
+  /* Couleur 0 - Vert foncé */
+  .machine-color-0.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #2d5016 0%, #1e340f 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #1e340f 0%, #2d5016 100%);
+  }
+  .machine-color-0.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #3d7026 0%, #2d5016 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #2d5016 0%, #3d7026 100%);
+  }
+  .machine-color-0.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #4d9036 0%, #3d7026 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #3d7026 0%, #4d9036 100%);
+  }
+  .machine-color-0.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #5db046 0%, #4d9036 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #4d9036 0%, #5db046 100%);
+  }
+  .machine-color-0.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #6dd056 0%, #5db046 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-0.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #5db046 0%, #6dd056 100%);
+  }
+  
+  /* Couleur 1 - Violet */
+  .machine-color-1.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #6a1b9a 0%, #4a148c 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #4a148c 0%, #6a1b9a 100%);
+  }
+  .machine-color-1.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #6a1b9a 0%, #7b1fa2 100%);
+  }
+  .machine-color-1.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
+  }
+  .machine-color-1.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #ba68c8 0%, #9c27b0 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%);
+  }
+  .machine-color-1.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ce93d8 0%, #ba68c8 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-1.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #ba68c8 0%, #ce93d8 100%);
+  }
+  
+  /* Couleur 2 - Orange */
+  .machine-color-2.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #bf360c 0%, #e65100 100%);
+  }
+  .machine-color-2.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #ff6f00 0%, #e65100 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #e65100 0%, #ff6f00 100%);
+  }
+  .machine-color-2.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ff8f00 0%, #ff6f00 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%);
+  }
+  .machine-color-2.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #ffb300 0%, #ff8f00 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ff8f00 0%, #ffb300 100%);
+  }
+  .machine-color-2.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
+    color: #1a3b50;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-2.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #ffb300 0%, #ffc107 100%);
+  }
+  
+  /* Couleur 3 - Rouge */
+  .machine-color-3.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #b71c1c 0%, #c62828 100%);
+  }
+  .machine-color-3.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #c62828 0%, #e53935 100%);
+  }
+  .machine-color-3.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ef5350 0%, #e53935 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #e53935 0%, #ef5350 100%);
+  }
+  .machine-color-3.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #e57373 0%, #ef5350 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ef5350 0%, #e57373 100%);
+  }
+  .machine-color-3.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ef9a9a 0%, #e57373 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-3.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #e57373 0%, #ef9a9a 100%);
+  }
+  
+  /* Couleur 4 - Turquoise */
+  .machine-color-4.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #00695c 0%, #004d40 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #004d40 0%, #00695c 100%);
+  }
+  .machine-color-4.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #00897b 0%, #00695c 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #00695c 0%, #00897b 100%);
+  }
+  .machine-color-4.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #26a69a 0%, #00897b 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #00897b 0%, #26a69a 100%);
+  }
+  .machine-color-4.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #4db6ac 0%, #26a69a 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #26a69a 0%, #4db6ac 100%);
+  }
+  .machine-color-4.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #80cbc4 0%, #4db6ac 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-4.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #4db6ac 0%, #80cbc4 100%);
+  }
+  
+  /* Couleur 5 - Rose */
+  .machine-color-5.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #c2185b 0%, #880e4f 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #880e4f 0%, #c2185b 100%);
+  }
+  .machine-color-5.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #c2185b 0%, #e91e63 100%);
+  }
+  .machine-color-5.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ec407a 0%, #e91e63 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #e91e63 0%, #ec407a 100%);
+  }
+  .machine-color-5.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #f06292 0%, #ec407a 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ec407a 0%, #f06292 100%);
+  }
+  .machine-color-5.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #f48fb1 0%, #f06292 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-5.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #f06292 0%, #f48fb1 100%);
+  }
+  
+  /* Couleur 6 - Indigo */
+  .machine-color-6.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #283593 0%, #1a237e 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+  }
+  .machine-color-6.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #3949ab 0%, #283593 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #283593 0%, #3949ab 100%);
+  }
+  .machine-color-6.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #3949ab 0%, #5c6bc0 100%);
+  }
+  .machine-color-6.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #7986cb 0%, #5c6bc0 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #5c6bc0 0%, #7986cb 100%);
+  }
+  .machine-color-6.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #9fa8da 0%, #7986cb 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-6.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #7986cb 0%, #9fa8da 100%);
+  }
+  
+  /* Couleur 7 - Marron */
+  .machine-color-7.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #5d4037 0%, #3e2723 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #3e2723 0%, #5d4037 100%);
+  }
+  .machine-color-7.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #795548 0%, #5d4037 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #5d4037 0%, #795548 100%);
+  }
+  .machine-color-7.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #8d6e63 0%, #795548 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #795548 0%, #8d6e63 100%);
+  }
+  .machine-color-7.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #a1887f 0%, #8d6e63 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #8d6e63 0%, #a1887f 100%);
+  }
+  .machine-color-7.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #bcaaa4 0%, #a1887f 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-7.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #a1887f 0%, #bcaaa4 100%);
+  }
+  
+  /* Couleur 8 - Vert menthe */
+  .machine-color-8.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #1b5e20 0%, #0d3e11 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #0d3e11 0%, #1b5e20 100%);
+  }
+  .machine-color-8.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #388e3c 0%, #1b5e20 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #1b5e20 0%, #388e3c 100%);
+  }
+  .machine-color-8.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #388e3c 0%, #4caf50 100%);
+  }
+  .machine-color-8.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #66bb6a 0%, #4caf50 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  }
+  .machine-color-8.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-8.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #66bb6a 0%, #81c784 100%);
+  }
+  
+  /* Couleur 9 - Ambre */
+  .machine-color-9.tree-level-0 .machine-content {
+    background: linear-gradient(135deg, #f57c00 0%, #e65100 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-0 .machine-content:hover {
+    background: linear-gradient(135deg, #e65100 0%, #f57c00 100%);
+  }
+  .machine-color-9.tree-level-1 .machine-content {
+    padding-left: 40px;
+    background: linear-gradient(135deg, #ffa726 0%, #f57c00 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-1 .machine-content:hover {
+    background: linear-gradient(135deg, #f57c00 0%, #ffa726 100%);
+  }
+  .machine-color-9.tree-level-2 .machine-content {
+    padding-left: 56px;
+    background: linear-gradient(135deg, #ffb74d 0%, #ffa726 100%);
+    color: white;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-2 .machine-content:hover {
+    background: linear-gradient(135deg, #ffa726 0%, #ffb74d 100%);
+  }
+  .machine-color-9.tree-level-3 .machine-content {
+    padding-left: 72px;
+    background: linear-gradient(135deg, #ffcc80 0%, #ffb74d 100%);
+    color: #1a3b50;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-3 .machine-content:hover {
+    background: linear-gradient(135deg, #ffb74d 0%, #ffcc80 100%);
+  }
+  .machine-color-9.tree-level-4 .machine-content {
+    padding-left: 88px;
+    background: linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%);
+    color: #1a3b50;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .machine-color-9.tree-level-4 .machine-content:hover {
+    background: linear-gradient(135deg, #ffcc80 0%, #ffe0b2 100%);
+  }
+  
+  /* Styles communs pour tous les niveaux avec couleurs */
+  [class*="machine-color-"].tree-level-0 .machine-name,
+  [class*="machine-color-"].tree-level-1 .machine-name,
+  [class*="machine-color-"].tree-level-2 .machine-name,
+  [class*="machine-color-"].tree-level-3 .machine-name,
+  [class*="machine-color-"].tree-level-4 .machine-name {
+    color: white;
+    font-weight: 600;
+  }
+  
+  [class*="machine-color-"].tree-level-2.machine-color-2 .machine-name,
+  [class*="machine-color-"].tree-level-3.machine-color-2 .machine-name,
+  [class*="machine-color-"].tree-level-4.machine-color-2 .machine-name,
+  [class*="machine-color-"].tree-level-3.machine-color-9 .machine-name,
+  [class*="machine-color-"].tree-level-4.machine-color-9 .machine-name {
+    color: #1a3b50;
+  }
+  
+  [class*="machine-color-"].tree-level-0 .machine-code,
+  [class*="machine-color-"].tree-level-1 .machine-code,
+  [class*="machine-color-"].tree-level-2 .machine-code,
+  [class*="machine-color-"].tree-level-3 .machine-code,
+  [class*="machine-color-"].tree-level-4 .machine-code {
+    color: rgba(255, 255, 255, 0.9);
+  }
+  
+  [class*="machine-color-"].tree-level-2.machine-color-2 .machine-code,
+  [class*="machine-color-"].tree-level-3.machine-color-2 .machine-code,
+  [class*="machine-color-"].tree-level-4.machine-color-2 .machine-code,
+  [class*="machine-color-"].tree-level-3.machine-color-9 .machine-code,
+  [class*="machine-color-"].tree-level-4.machine-color-9 .machine-code {
+    color: rgba(26, 59, 80, 0.7);
+  }
+  
+  [class*="machine-color-"].tree-level-0 .badge-counter,
+  [class*="machine-color-"].tree-level-1 .badge-counter,
+  [class*="machine-color-"].tree-level-2 .badge-counter,
+  [class*="machine-color-"].tree-level-3 .badge-counter,
+  [class*="machine-color-"].tree-level-4 .badge-counter {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+  
+  [class*="machine-color-"].tree-level-0 .btn-action,
+  [class*="machine-color-"].tree-level-1 .btn-action,
+  [class*="machine-color-"].tree-level-2 .btn-action,
+  [class*="machine-color-"].tree-level-3 .btn-action,
+  [class*="machine-color-"].tree-level-4 .btn-action {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  [class*="machine-color-"].tree-level-0 .btn-action:hover,
+  [class*="machine-color-"].tree-level-1 .btn-action:hover,
+  [class*="machine-color-"].tree-level-2 .btn-action:hover,
+  [class*="machine-color-"].tree-level-3 .btn-action:hover,
+  [class*="machine-color-"].tree-level-4 .btn-action:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+  
+  [class*="machine-color-"].tree-level-0 .machine-status,
+  [class*="machine-color-"].tree-level-1 .machine-status,
+  [class*="machine-color-"].tree-level-2 .machine-status,
+  [class*="machine-color-"].tree-level-3 .machine-status,
+  [class*="machine-color-"].tree-level-4 .machine-status {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+  }
+  
+  /* Réduction des indentations en mode portable */
+  @media (max-width: 768px) {
+    .tree-level-1 .machine-content {
+      padding-left: 20px;
+    }
+    
+    .tree-level-2 .machine-content {
+      padding-left: 28px;
+    }
+    
+    .tree-level-3 .machine-content {
+      padding-left: 36px;
+    }
+    
+    .tree-level-4 .machine-content {
+      padding-left: 44px;
+    }
+    
+    .machine-children {
+      margin-left: 12px;
+    }
+    
+    .machine-content {
+      padding: 10px 12px;
+      min-height: 48px;
+    }
+    
+    .machine-toggle {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      font-size: 12px;
+    }
+    
+    .machine-info {
+      font-size: 0.9rem;
+    }
+    
+    .machine-name {
+      font-size: 0.9rem;
+    }
+    
+    .badge-counter {
+      font-size: 0.75rem;
+      padding: 2px 6px;
+    }
+    
+    .btn-action {
+      width: 28px;
+      height: 28px;
+      font-size: 14px;
+      padding: 0;
+    }
+    
+    .machine-actions {
+      gap: 4px;
+      margin-left: 8px;
+    }
+  }
+  
+  .toggle-all-btn {
+    background: transparent;
+    border: none;
+    color: #1a3b50;
+    cursor: pointer;
+    padding: 8px;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+  
+  .toggle-all-btn:hover {
+    background-color: rgba(26, 59, 80, 0.1);
+    color: #03192f;
+  }
+  
+  .toggle-all-btn svg,
+  .toggle-all-btn img {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 3.5rem;
+  }
+  
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .actions-row {
+    margin-top: 0.5rem;
+  }
+  
+  .add-machine-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #ffc107;
+    color: #1a3b50;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  
+  .add-machine-btn:hover {
+    background-color: #ffb300;
+    transform: scale(1.05);
+    color: #1a3b50;
+    text-decoration: none;
+  }
+  
+  .add-machine-btn:active {
+    transform: scale(0.95);
+  }
+  
+  .left-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .maintenance-retard-btn,
+  .counter-btn {
+    background: transparent;
+    border: none;
+    color: #1a3b50;
+    cursor: pointer;
+    padding: 8px;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+  
+  .maintenance-retard-btn:hover,
+  .counter-btn:hover {
+    background-color: rgba(26, 59, 80, 0.1);
+    color: #03192f;
+  }
+  
+  .maintenance-retard-btn svg,
+  .maintenance-retard-btn img,
+  .counter-btn svg,
+  .counter-btn img {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .maintenance-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background-color: #dc3545;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    border: 2px solid white;
+  }
+  
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  /* Styles responsive pour la barre d'actions */
+  @media (max-width: 768px) {
+    .page-header {
+      margin-top: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .page-title {
+      font-size: 1.5rem;
+    }
+    
+    .actions-row {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 0.75rem;
+    }
+    
+    .header-actions {
+      gap: 6px;
+      width: 100%;
+      justify-content: flex-end;
+    }
+    
+    .add-machine-btn {
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+    }
+    
+    .toggle-all-btn {
+      width: 32px;
+      height: 32px;
+    }
+    
+    .toggle-all-btn svg,
+    .toggle-all-btn img {
+      width: 24px;
+      height: 24px;
+    }
+    
+    .maintenance-retard-btn,
+    .counter-btn {
+      width: 32px;
+      height: 32px;
+      padding: 6px;
+    }
+    
+    .maintenance-retard-btn svg,
+    .maintenance-retard-btn img,
+    .counter-btn svg,
+    .counter-btn img {
+      width: 30px;
+      height: 30px;
+    }
+    
+    .maintenance-badge {
+      width: 18px;
+      height: 18px;
+      font-size: 10px;
+      top: -2px;
+      right: -2px;
+    }
+  }
+</style>
+
+{% if followed_machines_data %}
+<div class="mb-4">
+  <div class="page-header">
+    <h1 class="page-title">{{ t('Les machines suivies') }}</h1>
+  </div>
+  
+  <div class="d-flex justify-content-between align-items-center mb-3 actions-row">
+    <div class="left-actions">
+      <a href="{{ url_for('maintenance_manage') }}" class="maintenance-retard-btn" title="Gestion des maintenances">
+        <img src="{{ url_for('static', filename='icons/maintenance-retard.svg') }}" alt="Maintenances en retard" style="width: 36px; height: 36px;">
+        {% if followed_overdue_count > 0 %}
+        <span class="maintenance-badge">{{ followed_overdue_count }}</span>
+        {% endif %}
+      </a>
+      <a href="{{ url_for('counter_report') }}" class="counter-btn" title="Relevé de compteur">
+        <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé de compteur" style="width: 36px; height: 36px;">
+      </a>
+    </div>
+    <div class="header-actions">
+      <a href="{{ url_for('new_machine') }}" class="add-machine-btn" title="Ajouter une machine">
+        +
+      </a>
+      <button type="button" class="toggle-all-btn" id="toggle-all-machines" onclick="toggleAllMachines()" title="{{ t('Afficher toutes les machines') }}">
+        <img src="{{ url_for('static', filename='icons/eye.svg') }}" alt="{{ t('Afficher toutes les machines') }}" id="eye-icon" style="width: 30px; height: 30px;">
+      </button>
+    </div>
+  </div>
+  
+  {% for group in followed_machines_data %}
+    {% set root = group.root_machine %}
+    {% set root_has_children = root.children|length > 0 %}
+    {% set root_is_followed = root.id in followed_machine_ids %}
+    {% set has_followed_in_tree = group.has_followed %}
+    {% set color_index = group.color_index %}
+    
+    <div class="machine-tree mb-4" data-tree-id="{{ root.id }}">
+      <div class="machine-node tree-level-0 machine-color-{{ color_index }} {% if not root_is_followed %}machine-not-followed{% endif %}" data-machine-id="{{ root.id }}" {% if not root_is_followed and not has_followed_in_tree %}style="display: none;"{% endif %}>
+        <div class="machine-content">
+          <button 
+            type="button" 
+            class="machine-toggle {% if not root_has_children %}no-children{% endif %}" 
+            data-target="{{ root.id }}"
+            data-machine-id="{{ root.id }}">
+            {% if root_has_children %}+{% endif %}
+          </button>
+          
+          {% set status = machine_status.get(root.id) %}
+          <span class="machine-status {% if status == 'danger' %}danger{% elif status == 'warning' %}warning{% endif %}"></span>
+          
+          <div class="machine-info">
+            <a href="{{ url_for('machine_detail', machine_id=root.id) }}" class="machine-name">
+              {{ root.name }} <span class="machine-code">({{ root.code }})</span>
+            </a>
+            <div class="machine-badges">
+              {% if root.is_root() and root.counters %}
+                {% for counter in root.counters %}
+                <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+                {% endfor %}
+              {% elif root.hour_counter_enabled %}
+              <span class="badge-counter">{{ "%.1f"|format(root.hours) }} {{ root.counter_unit or 'h' }}</span>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="machine-actions">
+            <button 
+              type="button" 
+              class="btn-action follow-btn {% if root.id in followed_machine_ids %}followed{% endif %}" 
+              data-machine-id="{{ root.id }}"
+              title="{% if root.id in followed_machine_ids %}Ne plus suivre{% else %}Suivre cette machine{% endif %}">
+              {% if root.id in followed_machine_ids %}★{% else %}☆{% endif %}
+            </button>
+            {% if current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(root) %}
+            <a href="{{ url_for('counter_report', machine_id=root.id) }}" class="btn-action" title="Relevé compteur">📊</a>
+            {% endif %}
+            {% if current_user.user_type == 'admin' %}
+            <a href="{{ url_for('edit_machine', machine_id=root.id) }}" class="btn-action" title="Modifier">✏️</a>
+            <form method="post" action="{{ url_for('delete_machine', machine_id=root.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.');">
+              <button type="submit" class="btn-action" title="Supprimer">🗑️</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        
+        {% if root_has_children %}
+        <div class="machine-children expanded" id="children-{{ root.id }}">
+          {% for child in root.children|sort(attribute='name') %}
+            {{ render_machine_node(child, child.depth(), color_index) }}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="mb-4">
+  <div class="page-header">
+    <h1 class="page-title">{{ t('Les machines suivies') }}</h1>
+  </div>
+  
+  <div class="d-flex justify-content-between align-items-center mb-3 actions-row">
+    <div class="left-actions">
+      <a href="{{ url_for('maintenance_manage') }}" class="maintenance-retard-btn" title="Gestion des maintenances">
+        <img src="{{ url_for('static', filename='icons/maintenance-retard.svg') }}" alt="Maintenances en retard" style="width: 36px; height: 36px;">
+        {% if followed_overdue_count > 0 %}
+        <span class="maintenance-badge">{{ followed_overdue_count }}</span>
+        {% endif %}
+      </a>
+      <a href="{{ url_for('counter_report') }}" class="counter-btn" title="Relevé de compteur">
+        <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé de compteur" style="width: 36px; height: 36px;">
+      </a>
+    </div>
+    <div class="header-actions">
+      <a href="{{ url_for('new_machine') }}" class="add-machine-btn" title="Ajouter une machine">
+        +
+      </a>
+    </div>
+  </div>
+  
+  <p class="text-muted">Aucune machine suivie. Utilisez l'étoile (☆) sur la page Machines pour suivre vos machines favorites.</p>
+</div>
+{% endif %}
+
+<!-- Tableau de bord -->
+<div class="dashboard-section mt-5 mb-4">
+  <div class="page-header">
+    <h1 class="page-title">{{ t('Tableau de bord') }}</h1>
+  </div>
+  
+  <div class="dashboard-controls card mb-4">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Période</label>
+          <select class="form-select" id="dashboard-period">
+            <option value="semaine">Semaine</option>
+            <option value="mois">Mois</option>
+            <option value="annee">Année</option>
+            <option value="depuis_le_debut" selected>Depuis le début</option>
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label">Machines</label>
+          <select class="form-select" id="dashboard-machines" multiple size="5">
+            {% set first_machine = true %}
+            {% for root in followed_machines_data %}
+              {% for node, level in build_machine_tree(root.root_machine) %}
+                {% if node.id in followed_machine_ids %}
+                <option value="{{ node.id }}" {% if first_machine %}selected{% set first_machine = false %}{% endif %}>
+                  {{ '&nbsp;&nbsp;'|safe * level }}{{ node.name }} ({{ node.code }})
+                </option>
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+          </select>
+          <small class="form-text text-muted">Maintenez Ctrl/Cmd pour sélectionner plusieurs machines</small>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Métriques</label>
+          <div class="form-check">
+            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_preventives" id="metric-preventive" checked>
+            <label class="form-check-label" for="metric-preventive">Maintenances préventives</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_curatives" id="metric-corrective" checked>
+            <label class="form-check-label" for="metric-corrective">Maintenances curatives</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input metric-checkbox" type="checkbox" value="cout_produits" id="metric-cost" checked>
+            <label class="form-check-label" for="metric-cost">Coût des produits</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input metric-checkbox" type="checkbox" value="checklists" id="metric-checklist" checked>
+            <label class="form-check-label" for="metric-checklist">Checklists</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_retard" id="metric-late">
+            <label class="form-check-label" for="metric-late">Maintenances en retard</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_a_heure" id="metric-ontime">
+            <label class="form-check-label" for="metric-ontime">Maintenances à l'heure</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input metric-checkbox" type="checkbox" value="mises_a_jour_compteur" id="metric-counter" checked>
+            <label class="form-check-label" for="metric-counter">Mises à jour compteur</label>
+          </div>
+        </div>
+      </div>
+      <div class="row mt-3">
+        <div class="col-12">
+          <button type="button" class="btn btn-primary-fms" id="dashboard-update">Actualiser</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="dashboard-results card">
+    <div class="card-body">
+      <div id="dashboard-loading" class="text-center" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Chargement...</span>
+        </div>
+      </div>
+      <div id="dashboard-table-container"></div>
+    </div>
+  </div>
+  
+  <!-- Graphique en courbes -->
+  <div class="dashboard-chart card mt-4">
+    <div class="card-body">
+      <h5 class="card-title mb-3">Visualisation en courbes</h5>
+      <div id="dashboard-chart-loading" class="text-center" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Chargement...</span>
+        </div>
+      </div>
+      <canvas id="dashboard-chart"></canvas>
+    </div>
+  </div>
+</div>
+
+<style>
+.dashboard-section {
+  margin-top: 3rem;
+}
+
+.dashboard-controls .form-select[multiple] {
+  min-height: 120px;
+}
+
+.dashboard-results table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dashboard-results th,
+.dashboard-results td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.dashboard-results th {
+  background-color: #1a3b50;
+  color: white;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.dashboard-results tr:hover {
+  background-color: #f8f9fa;
+}
+
+.dashboard-results .metric-value {
+  font-weight: 600;
+  color: #1a3b50;
+}
+
+.dashboard-results .metric-cost {
+  color: #28a745;
+}
+
+.dashboard-chart {
+  min-height: 400px;
+}
+
+.dashboard-chart canvas {
+  max-height: 500px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-controls .row > div {
+    margin-bottom: 1rem;
+  }
+  
+  .dashboard-results {
+    overflow-x: auto;
+  }
+  
+  .dashboard-results table {
+    font-size: 0.875rem;
+  }
+  
+  .dashboard-results th,
+  .dashboard-results td {
+    padding: 0.5rem;
+  }
+}
+</style>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+let showAllMachines = false;
+let dashboardChart = null;
+
+function toggleAllMachines() {
+  showAllMachines = !showAllMachines;
+  const button = document.getElementById('toggle-all-machines');
+  
+  console.log('=== TOGGLE ALL MACHINES ===');
+  console.log('showAllMachines:', showAllMachines);
+  
+  if (showAllMachines) {
+    // ÉTAPE 1: Déplier TOUS les enfants d'abord (même ceux dans des divs collapsed)
+    const allChildren = document.querySelectorAll('.machine-children');
+    console.log('Tous les enfants trouvés:', allChildren.length);
+    
+    allChildren.forEach(childrenDiv => {
+      // Forcer l'affichage en enlevant collapsed et en ajoutant expanded
+      childrenDiv.classList.remove('collapsed');
+      childrenDiv.classList.add('expanded');
+      childrenDiv.style.display = 'block';
+      
+      // Afficher aussi le parent si nécessaire
+      const parentNode = childrenDiv.closest('.machine-node');
+      if (parentNode) {
+        parentNode.style.display = '';
+        const toggleBtn = parentNode.querySelector('.machine-toggle:not(.no-children)');
+        if (toggleBtn) {
+          toggleBtn.textContent = '−';
+        }
+      }
+    });
+    
+    // ÉTAPE 2: Afficher toutes les machines non suivies
+    const allNotFollowed = document.querySelectorAll('.machine-not-followed');
+    console.log('Machines non suivies trouvées:', allNotFollowed.length);
+    
+    allNotFollowed.forEach(node => {
+      node.style.display = '';
+      // S'assurer que tous les parents sont aussi affichés
+      let current = node;
+      while (current && current !== document.body) {
+        if (current.classList && current.classList.contains('machine-node')) {
+          current.style.display = '';
+        }
+        if (current.classList && current.classList.contains('machine-children')) {
+          current.classList.remove('collapsed');
+          current.classList.add('expanded');
+          current.style.display = 'block';
+        }
+        current = current.parentElement;
+      }
+    });
+    
+    const eyeIcon = button.querySelector('#eye-icon');
+    if (eyeIcon) {
+      eyeIcon.src = "{{ url_for('static', filename='icons/eye-slash.svg') }}";
+    }
+    button.title = '{{ t('Masquer les machines non suivies') }}';
+  } else {
+    // Masquer toutes les machines non suivies
+    const allNotFollowed = document.querySelectorAll('.machine-not-followed');
+    allNotFollowed.forEach(node => {
+      node.style.display = 'none';
+    });
+    
+    // Replier seulement ceux qui ne sont pas suivis
+    const allChildren = document.querySelectorAll('.machine-children');
+    allChildren.forEach(childrenDiv => {
+      const parentNode = childrenDiv.closest('.machine-node');
+      if (parentNode && parentNode.classList.contains('machine-not-followed')) {
+        childrenDiv.classList.remove('expanded');
+        childrenDiv.classList.add('collapsed');
+        const toggleBtn = parentNode.querySelector('.machine-toggle:not(.no-children)');
+        if (toggleBtn) {
+          toggleBtn.textContent = '+';
+        }
+      }
+    });
+    
+    const eyeIcon = button.querySelector('#eye-icon');
+    if (eyeIcon) {
+      eyeIcon.src = "{{ url_for('static', filename='icons/eye.svg') }}";
+    }
+    button.title = '{{ t('Afficher toutes les machines') }}';
+  }
+  
+  console.log('=== FIN TOGGLE ===');
+}
+
+function toggleMachine(button, machineId) {
+  const childrenDiv = document.getElementById('children-' + machineId);
+  if (!childrenDiv) return;
+  
+  const isCollapsed = childrenDiv.classList.contains('collapsed');
+  
+  if (isCollapsed) {
+    childrenDiv.classList.remove('collapsed');
+    childrenDiv.classList.add('expanded');
+    button.textContent = '−';
+  } else {
+    childrenDiv.classList.remove('expanded');
+    childrenDiv.classList.add('collapsed');
+    button.textContent = '+';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Debug: vérifier combien de machines sont dans le HTML
+  const allMachines = document.querySelectorAll('.machine-node');
+  const allNotFollowedMachines = document.querySelectorAll('.machine-not-followed');
+  console.log('=== DEBUG PAGE ACCUEIL ===');
+  console.log('Total machines dans le HTML:', allMachines.length);
+  console.log('Machines non suivies dans le HTML:', allNotFollowedMachines.length);
+  console.log('=======================');
+  
+  // Attacher les listeners aux boutons toggle
+  function attachToggleListeners() {
+    document.querySelectorAll('.machine-toggle:not(.no-children)').forEach(button => {
+      if (!button.dataset.listenerAttached) {
+        button.dataset.listenerAttached = 'true';
+        const machineId = button.getAttribute('data-target') || button.getAttribute('data-machine-id');
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleMachine(this, machineId);
+        });
+      }
+    });
+  }
+  
+  attachToggleListeners();
+  
+  // Initialiser les boutons de suivi
+  const followButtons = document.querySelectorAll('.follow-btn');
+  
+  followButtons.forEach(button => {
+    button.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const machineId = this.getAttribute('data-machine-id');
+      
+      this.disabled = true;
+      
+      fetch(`/machines/${machineId}/toggle-follow`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          if (data.is_followed) {
+            this.innerHTML = '★';
+            this.classList.add('followed');
+            this.title = 'Ne plus suivre';
+          } else {
+            this.innerHTML = '☆';
+            this.classList.remove('followed');
+            this.title = 'Suivre cette machine';
+          }
+          // Recharger la page pour mettre à jour l'affichage
+          location.reload();
+        } else {
+          alert('Erreur : ' + (data.error || 'Impossible de modifier le suivi'));
+        }
+      })
+      .catch(error => {
+        console.error('Erreur:', error);
+        alert('Erreur lors de la modification du suivi');
+      })
+      .finally(() => {
+        this.disabled = false;
+      });
+    });
+  });
+});
+
+// Tableau de bord
+document.addEventListener('DOMContentLoaded', function() {
+  const updateBtn = document.getElementById('dashboard-update');
+  const periodSelect = document.getElementById('dashboard-period');
+  const machinesSelect = document.getElementById('dashboard-machines');
+  const metricCheckboxes = document.querySelectorAll('.metric-checkbox');
+  const loadingDiv = document.getElementById('dashboard-loading');
+  const chartLoadingDiv = document.getElementById('dashboard-chart-loading');
+  const tableContainer = document.getElementById('dashboard-table-container');
+  const chartCanvas = document.getElementById('dashboard-chart');
+  
+  function updateDashboard() {
+    // Récupérer les machines sélectionnées
+    const selectedMachines = Array.from(machinesSelect.selectedOptions).map(opt => opt.value);
+    if (selectedMachines.length === 0) {
+      tableContainer.innerHTML = '<p class="text-muted">Veuillez sélectionner au moins une machine.</p>';
+      return;
+    }
+    
+    // Récupérer les métriques sélectionnées
+    const selectedMetrics = Array.from(metricCheckboxes)
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+    
+    if (selectedMetrics.length === 0) {
+      tableContainer.innerHTML = '<p class="text-muted">Veuillez sélectionner au moins une métrique.</p>';
+      return;
+    }
+    
+    // Afficher le chargement
+    loadingDiv.style.display = 'block';
+    chartLoadingDiv.style.display = 'block';
+    tableContainer.innerHTML = '';
+    
+    // Construire l'URL de l'API
+    const period = periodSelect.value;
+    const machineIds = selectedMachines.join(',');
+    const metrics = selectedMetrics.join(',');
+    const url = `/api/dashboard?period=${encodeURIComponent(period)}&machine_ids=${encodeURIComponent(machineIds)}&metrics=${encodeURIComponent(metrics)}`;
+    
+    const metricLabels = {
+      'maintenances_preventives': 'Maintenances préventives',
+      'maintenances_curatives': 'Maintenances curatives',
+      'cout_produits': 'Coût produits (€)',
+      'checklists': 'Checklists',
+      'maintenances_retard': 'En retard',
+      'maintenances_a_heure': 'À l\'heure',
+      'mises_a_jour_compteur': 'Mises à jour compteur'
+    };
+    
+    // Appel API
+    fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        loadingDiv.style.display = 'none';
+        
+        if (!data.success || !data.data || data.data.length === 0) {
+          tableContainer.innerHTML = '<p class="text-muted">Aucune donnée disponible pour les critères sélectionnés.</p>';
+          updateChart(null, null, null, null);
+          return;
+        }
+        
+        // Créer le tableau
+        const table = document.createElement('table');
+        table.className = 'table table-striped';
+        
+        // En-têtes
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const machineHeader = document.createElement('th');
+        machineHeader.textContent = 'Machine';
+        headerRow.appendChild(machineHeader);
+        
+        selectedMetrics.forEach(metric => {
+          const th = document.createElement('th');
+          th.textContent = metricLabels[metric] || metric;
+          headerRow.appendChild(th);
+        });
+        
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Corps du tableau
+        const tbody = document.createElement('tbody');
+        data.data.forEach(machineData => {
+          const row = document.createElement('tr');
+          
+          // Nom de la machine
+          const machineCell = document.createElement('td');
+          machineCell.innerHTML = `<strong>${machineData.machine_name}</strong><br><small class="text-muted">${machineData.machine_code}</small>`;
+          row.appendChild(machineCell);
+          
+          // Valeurs des métriques
+          selectedMetrics.forEach(metric => {
+            const cell = document.createElement('td');
+            const value = machineData.metrics[metric];
+            if (value !== undefined) {
+              if (metric === 'cout_produits') {
+                cell.className = 'metric-value metric-cost';
+                cell.textContent = value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+              } else {
+                cell.className = 'metric-value';
+                cell.textContent = value;
+              }
+            } else {
+              cell.textContent = '-';
+            }
+            row.appendChild(cell);
+          });
+          
+          tbody.appendChild(row);
+        });
+        
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+        
+        // Mettre à jour le graphique avec les données temporelles
+        updateChart(period, selectedMachines, selectedMetrics, metricLabels);
+      })
+      .catch(error => {
+        loadingDiv.style.display = 'none';
+        chartLoadingDiv.style.display = 'none';
+        tableContainer.innerHTML = '<p class="text-danger">Erreur lors du chargement des données : ' + error.message + '</p>';
+        updateChart(null, null, null, null);
+        console.error('Erreur:', error);
+      });
+  }
+  
+  function updateChart(period, selectedMachines, selectedMetrics, metricLabels) {
+    // Détruire le graphique existant s'il existe
+    if (dashboardChart) {
+      dashboardChart.destroy();
+      dashboardChart = null;
+    }
+    
+    if (!period || !selectedMachines || selectedMachines.length === 0 || !selectedMetrics || selectedMetrics.length === 0) {
+      return;
+    }
+    
+    // Afficher le chargement du graphique
+    chartLoadingDiv.style.display = 'block';
+    
+    // Construire l'URL de l'API pour le graphique temporel
+    const machineIds = selectedMachines.join(',');
+    const metrics = selectedMetrics.join(',');
+    const url = `/api/dashboard-chart?period=${encodeURIComponent(period)}&machine_ids=${encodeURIComponent(machineIds)}&metrics=${encodeURIComponent(metrics)}`;
+    
+    // Appel API pour les données temporelles
+    fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        chartLoadingDiv.style.display = 'none';
+        
+        if (!data.success || !data.data || data.data.length === 0) {
+          return;
+        }
+        
+        // Préparer les données pour le graphique temporel
+        const labels = data.data.map(d => d.period_label);
+        const datasets = [];
+        
+        // Couleurs pour les différentes métriques
+        const colors = [
+          { border: 'rgb(26, 59, 80)', background: 'rgba(26, 59, 80, 0.1)' },
+          { border: 'rgb(40, 167, 69)', background: 'rgba(40, 167, 69, 0.1)' },
+          { border: 'rgb(220, 53, 69)', background: 'rgba(220, 53, 69, 0.1)' },
+          { border: 'rgb(255, 193, 7)', background: 'rgba(255, 193, 7, 0.1)' },
+          { border: 'rgb(23, 162, 184)', background: 'rgba(23, 162, 184, 0.1)' },
+          { border: 'rgb(108, 117, 125)', background: 'rgba(108, 117, 125, 0.1)' },
+          { border: 'rgb(111, 66, 193)', background: 'rgba(111, 66, 193, 0.1)' }
+        ];
+        
+        selectedMetrics.forEach((metric, index) => {
+          const values = data.data.map(d => {
+            const value = d.metrics[metric];
+            return value !== undefined ? value : 0;
+          });
+          
+          datasets.push({
+            label: metricLabels[metric] || metric,
+            data: values,
+            borderColor: colors[index % colors.length].border,
+            backgroundColor: colors[index % colors.length].background,
+            tension: 0.4,
+            fill: false
+          });
+        });
+        
+        // Créer le graphique
+        const ctx = chartCanvas.getContext('2d');
+        dashboardChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: {
+                  font: {
+                    family: 'Montserrat',
+                    size: 12
+                  }
+                }
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                  label: function(context) {
+                    const label = context.dataset.label || '';
+                    const value = context.parsed.y;
+                    if (context.dataset.label.includes('Coût')) {
+                      return label + ': ' + value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+                    }
+                    return label + ': ' + value;
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  font: {
+                    family: 'Montserrat'
+                  }
+                },
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.1)'
+                }
+              },
+              x: {
+                ticks: {
+                  font: {
+                    family: 'Montserrat'
+                  },
+                  maxRotation: 45,
+                  minRotation: 45
+                },
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.1)'
+                }
+              }
+            },
+            interaction: {
+              mode: 'nearest',
+              axis: 'x',
+              intersect: false
+            }
+          }
+        });
+      })
+      .catch(error => {
+        chartLoadingDiv.style.display = 'none';
+        console.error('Erreur lors du chargement du graphique:', error);
+      });
+  }
+  
+  // Événements
+  updateBtn.addEventListener('click', updateDashboard);
+  
+  // Charger les données au chargement de la page
+  updateDashboard();
+});
+</script>
+{% endblock %}

@@ -153,16 +153,41 @@
   </div>
   
   <!-- Section pour compteurs multiples (machines racines uniquement) -->
-  {% if not is_edit %}
   <div class="mb-3 d-none" id="multipleCountersSection">
     <h5>Compteurs multiples (machine racine)</h5>
     <p class="text-muted small">Les machines racines peuvent avoir plusieurs compteurs nommés.</p>
     <div id="countersContainer">
       <!-- Les compteurs seront ajoutés ici dynamiquement -->
+      {% if is_edit and existing_counters %}
+        {% for counter in existing_counters %}
+        <div class="card mb-3 counter-row" data-index="{{ loop.index0 }}" data-counter-id="{{ counter.id }}">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Compteur {{ loop.index }}</h6>
+              <button type="button" class="btn btn-sm btn-outline-danger remove-counter" data-index="{{ loop.index0 }}">🗑️</button>
+            </div>
+            <input type="hidden" name="counter_id_{{ loop.index0 }}" value="{{ counter.id }}" />
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Nom du compteur <span class="text-danger">*</span></label>
+                <input class="form-control" type="text" name="counter_name_{{ loop.index0 }}" placeholder="Ex: Heures moteur" value="{{ counter.name }}" required />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Valeur initiale</label>
+                <input class="form-control" type="number" step="0.1" name="counter_value_{{ loop.index0 }}" value="{{ counter.value }}" />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Unité</label>
+                <input class="form-control" type="text" name="counter_unit_{{ loop.index0 }}" placeholder="h, cycles, etc." value="{{ counter.unit or 'h' }}" maxlength="20" />
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% endif %}
     </div>
     <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="addCounterBtn">+ Ajouter un compteur</button>
   </div>
-  {% endif %}
   
   <!-- Section pour compteur unique (sous-machines) -->
   <div class="mb-3 d-none" id="singleCounterSection">
@@ -195,7 +220,7 @@
   const countersContainer = document.getElementById("countersContainer");
   const addCounterBtn = document.getElementById("addCounterBtn");
   const isEditMode = {% if is_edit %}true{% else %}false{% endif %};
-  let counterIndex = 0;
+  let counterIndex = {% if is_edit and existing_counters %}{{ existing_counters|length }}{% else %}0{% endif %};
   
   // Template pour un compteur
   function createCounterRow(index) {
@@ -225,26 +250,49 @@
     `;
   }
   
+  // Attacher les événements de suppression aux compteurs existants
+  document.addEventListener('DOMContentLoaded', function() {
+    const removeButtons = document.querySelectorAll('.remove-counter');
+    removeButtons.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const row = this.closest('.counter-row');
+        if (row) {
+          // Si c'est un compteur existant, marquer pour suppression
+          const counterIdInput = row.querySelector('input[name^="counter_id_"]');
+          if (counterIdInput && counterIdInput.value) {
+            // Créer un champ hidden pour indiquer la suppression
+            const deleteInput = document.createElement('input');
+            deleteInput.type = 'hidden';
+            deleteInput.name = 'counter_delete_' + counterIdInput.value;
+            deleteInput.value = '1';
+            document.querySelector('form').appendChild(deleteInput);
+          }
+          row.remove();
+        }
+      });
+    });
+  });
+  
   // Fonction pour mettre à jour l'affichage selon le parent sélectionné
   function updateCounterSections() {
     if (!parentSelect) return;
     
     const isRoot = !parentSelect.value;
     
-    if (isRoot && !isEditMode && multipleCountersSection && countersContainer) {
+    if (isRoot && multipleCountersSection && countersContainer) {
       // Machine racine : afficher la section compteurs multiples
       multipleCountersSection.classList.remove("d-none");
       if (singleCounterSection) singleCounterSection.classList.add("d-none");
       
-      // Ajouter un premier compteur si le conteneur est vide
-      if (countersContainer.children.length === 0) {
+      // Ajouter un premier compteur si le conteneur est vide (uniquement en mode création)
+      if (!isEditMode && countersContainer.children.length === 0) {
         addCounter();
       }
     } else {
       // Sous-machine : afficher la section compteur unique
       if (multipleCountersSection) multipleCountersSection.classList.add("d-none");
       if (singleCounterSection) singleCounterSection.classList.remove("d-none");
-      if (countersContainer) {
+      if (countersContainer && !isEditMode) {
         countersContainer.innerHTML = "";
         counterIndex = 0;
       }
@@ -289,7 +337,16 @@
   }
   
   // Initialiser au chargement
-  updateCounterSections();
+  if (isEditMode) {
+    // En mode édition, vérifier si la machine est racine
+    const isRoot = !parentSelect || !parentSelect.value;
+    if (isRoot && multipleCountersSection) {
+      multipleCountersSection.classList.remove("d-none");
+      if (singleCounterSection) singleCounterSection.classList.add("d-none");
+    }
+  } else {
+    updateCounterSections();
+  }
 </script>
 {% endblock %}
 

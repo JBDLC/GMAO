@@ -39,8 +39,11 @@
           title="{% if node.id in followed_machine_ids %}{{ t('Ne plus suivre') }}{% else %}{{ t('Suivre cette machine') }}{% endif %}">
           {% if node.id in followed_machine_ids %}★{% else %}☆{% endif %}
         </button>
-        {% if level == 0 and current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(node) %}
+        {% if current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(node) %}
         <a href="{{ url_for('counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Relevé de compteur') }}">📊</a>
+        {% endif %}
+        {% if current_user.user_type == 'admin' and has_counter_in_tree(node) %}
+        <a href="{{ url_for('edit_counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Modifier le relevé compteur') }}">✏️</a>
         {% endif %}
         {% if current_user.user_type == 'admin' %}
         <a href="{{ url_for('edit_machine', machine_id=node.id) }}" class="btn-action" title="{{ t('Modifier') }}">✏️</a>
@@ -952,6 +955,9 @@
           </button>
           {% if current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(root) %}
           <a href="{{ url_for('counter_report', machine_id=root.id) }}" class="btn-action" title="Relevé compteur">📊</a>
+          {% endif %}
+          {% if current_user.user_type == 'admin' and has_counter_in_tree(root) %}
+          <a href="{{ url_for('edit_counter_report', machine_id=root.id) }}" class="btn-action" title="{{ t('Modifier le relevé compteur') }}">✏️</a>
           {% endif %}
           {% if current_user.user_type == 'admin' %}
           <a href="{{ url_for('edit_machine', machine_id=root.id) }}" class="btn-action" title="Modifier">✏️</a>

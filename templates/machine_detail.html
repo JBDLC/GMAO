@@ -43,7 +43,9 @@
       <div class="btn-group">
         <a href="{{ url_for('machine_qrcode', machine_id=machine.id) }}" class="btn btn-outline-secondary" title="{{ t('Voir le QR code') }}" target="_blank">📱 {{ t('QR Code') }}</a>
         {% if current_user.user_type == 'admin' %}
+        {% if machine.hour_counter_enabled or (machine.is_root() and machine.counters) %}
         <a href="{{ url_for('counter_report', machine_id=machine.id) }}" class="btn btn-outline-info" title="{{ t('Relevé de compteur') }}">📊 {{ t('Relevé') }}</a>
+        {% endif %}
         {% if machine.is_root() %}
         <a href="{{ url_for('machine_counters', machine_id=machine.id) }}" class="btn btn-outline-info" title="{{ t('Gérer les compteurs') }}">⚙️ {{ t('Compteurs') }}</a>
         {% endif %}
@@ -98,22 +100,22 @@
   <div class="card-header p-0">
     <ul class="nav nav-tabs card-header-tabs" role="tablist">
       <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="checklists-tab" data-bs-toggle="tab" data-bs-target="#checklists" type="button" role="tab" aria-controls="checklists" aria-selected="true">
+        <button class="nav-link {% if active_tab == 'checklists' %}active{% endif %}" id="checklists-tab" data-bs-toggle="tab" data-bs-target="#checklists" type="button" role="tab" aria-controls="checklists" aria-selected="{% if active_tab == 'checklists' %}true{% else %}false{% endif %}" data-tab="checklists">
           {{ t('Check-list') }}
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="corrective-tab" data-bs-toggle="tab" data-bs-target="#corrective" type="button" role="tab" aria-controls="corrective" aria-selected="false">
+        <button class="nav-link {% if active_tab == 'corrective' %}active{% endif %}" id="corrective-tab" data-bs-toggle="tab" data-bs-target="#corrective" type="button" role="tab" aria-controls="corrective" aria-selected="{% if active_tab == 'corrective' %}true{% else %}false{% endif %}" data-tab="corrective">
           {{ t('Maintenance corrective') }}
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="preventive-tab" data-bs-toggle="tab" data-bs-target="#preventive" type="button" role="tab" aria-controls="preventive" aria-selected="false">
+        <button class="nav-link {% if active_tab == 'preventive' %}active{% endif %}" id="preventive-tab" data-bs-toggle="tab" data-bs-target="#preventive" type="button" role="tab" aria-controls="preventive" aria-selected="{% if active_tab == 'preventive' %}true{% else %}false{% endif %}" data-tab="preventive">
           {{ t('Maintenance préventive') }}
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="documentation-tab" data-bs-toggle="tab" data-bs-target="#documentation" type="button" role="tab" aria-controls="documentation" aria-selected="false">
+        <button class="nav-link {% if active_tab == 'documentation' %}active{% endif %}" id="documentation-tab" data-bs-toggle="tab" data-bs-target="#documentation" type="button" role="tab" aria-controls="documentation" aria-selected="{% if active_tab == 'documentation' %}true{% else %}false{% endif %}" data-tab="documentation">
           {{ t('Documentation') }}
         </button>
       </li>
@@ -122,7 +124,7 @@
   <div class="card-body">
     <div class="tab-content" id="machineTabsContent">
       <!-- Onglet 1: Check lists -->
-      <div class="tab-pane fade show active" id="checklists" role="tabpanel" aria-labelledby="checklists-tab">
+      <div class="tab-pane fade {% if active_tab == 'checklists' %}show active{% endif %}" id="checklists" role="tabpanel" aria-labelledby="checklists-tab">
         <!-- Modèles de check lists -->
         <div class="card mb-4">
           <div class="card-header d-flex justify-content-between align-items-center">
@@ -138,7 +140,7 @@
             <div class="row g-3">
               {% for template in checklist_templates %}
               <div class="col-md-6">
-                <div class="card h-100">
+                <div class="card">
                   <div class="card-body">
                     <h6 class="card-title">{{ template.name }}</h6>
                     <p class="card-text small text-muted mb-2">
@@ -212,7 +214,7 @@
       </div>
 
       <!-- Onglet 2: Maintenance corrective -->
-      <div class="tab-pane fade" id="corrective" role="tabpanel" aria-labelledby="corrective-tab">
+      <div class="tab-pane fade {% if active_tab == 'corrective' %}show active{% endif %}" id="corrective" role="tabpanel" aria-labelledby="corrective-tab">
         <div class="card mb-4">
           <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">{{ t('Maintenances correctives') }}</h5>
@@ -252,7 +254,7 @@
       </div>
 
       <!-- Onglet 3: Maintenance préventive -->
-      <div class="tab-pane fade" id="preventive" role="tabpanel" aria-labelledby="preventive-tab">
+      <div class="tab-pane fade {% if active_tab == 'preventive' %}show active{% endif %}" id="preventive" role="tabpanel" aria-labelledby="preventive-tab">
         {% set has_own_counter = machine.hour_counter_enabled %}
         {% set has_root_counters = root_machine.is_root() and root_machine.counters %}
         {% if has_own_counter or has_root_counters %}
@@ -273,7 +275,7 @@
               {% set report = item.report %}
               {% set hours_remaining = item.hours_since %}
               <div class="col-md-6">
-                <div class="card h-100 {% if hours_remaining <= 0 %}border-danger{% elif hours_remaining <= report.periodicity * 0.1 %}border-warning{% else %}border-secondary{% endif %}">
+                <div class="card {% if hours_remaining <= 0 %}border-danger{% elif hours_remaining <= report.periodicity * 0.1 %}border-warning{% else %}border-secondary{% endif %}">
                   <div class="card-body">
                     <h6 class="card-title">{{ report.name }}</h6>
                     <div class="mb-2">
@@ -354,7 +356,7 @@
       </div>
 
       <!-- Onglet 4: Documentation -->
-      <div class="tab-pane fade" id="documentation" role="tabpanel" aria-labelledby="documentation-tab">
+      <div class="tab-pane fade {% if active_tab == 'documentation' %}show active{% endif %}" id="documentation" role="tabpanel" aria-labelledby="documentation-tab">
         <div class="card mb-4">
           <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Documentation</h5>
@@ -425,6 +427,33 @@
 </div>
 {% endif %}
 <style>
+  /* Réduction de la hauteur des cartes checklist et maintenance */
+  #checklists .card-body,
+  #preventive .card-body {
+    padding: 0.75rem;
+  }
+  
+  #checklists .card-title,
+  #preventive .card-title {
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+  }
+  
+  #checklists .card-text,
+  #preventive .card-text {
+    margin-bottom: 0.5rem;
+  }
+  
+  #checklists .mb-2,
+  #preventive .mb-2 {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  #checklists .btn-group,
+  #preventive .btn-group {
+    margin-top: 0.5rem;
+  }
+  
   /* Responsive pour machine_detail */
   @media (max-width: 768px) {
     .d-flex.justify-content-between {
@@ -512,4 +541,19 @@
     }
   }
 </style>
+<script>
+  // Mettre à jour l'URL avec le paramètre tab quand on clique sur un onglet
+  document.addEventListener('DOMContentLoaded', function() {
+    const tabButtons = document.querySelectorAll('[data-tab]');
+    tabButtons.forEach(function(button) {
+      button.addEventListener('shown.bs.tab', function(event) {
+        const tab = event.target.getAttribute('data-tab');
+        const url = new URL(window.location);
+        url.searchParams.set('tab', tab);
+        // Mettre à jour l'URL sans recharger la page
+        window.history.pushState({}, '', url);
+      });
+    });
+  });
+</script>
 {% endblock %}

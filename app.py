@@ -1192,6 +1192,34 @@ def toggle_follow_machine(machine_id):
         return json.dumps({"success": False, "error": str(exc)}), 500
 
 
+def get_machine_detail_url(machine_id, tab=None):
+    """Helper function to generate machine_detail URL with tab parameter"""
+    if tab:
+        # Stocker dans la session pour cette machine
+        session_key = f'machine_{machine_id}_tab'
+        session[session_key] = tab
+        return url_for("machine_detail", machine_id=machine_id, tab=tab)
+    # Essayer d'extraire le tab depuis le referrer
+    referrer = request.referrer
+    if referrer:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(referrer)
+        query_params = parse_qs(parsed.query)
+        if 'tab' in query_params:
+            tab = query_params['tab'][0]
+            if tab in ['checklists', 'corrective', 'preventive', 'documentation']:
+                session_key = f'machine_{machine_id}_tab'
+                session[session_key] = tab
+                return url_for("machine_detail", machine_id=machine_id, tab=tab)
+    # Essayer depuis la session
+    session_key = f'machine_{machine_id}_tab'
+    if session_key in session:
+        tab = session[session_key]
+        if tab in ['checklists', 'corrective', 'preventive', 'documentation']:
+            return url_for("machine_detail", machine_id=machine_id, tab=tab)
+    return url_for("machine_detail", machine_id=machine_id)
+
+
 @app.route("/machines/<int:machine_id>")
 @login_required
 def machine_detail(machine_id):
@@ -1286,6 +1314,20 @@ def machine_detail(machine_id):
         .all()
     )
 
+    # Récupérer l'onglet actif depuis l'URL ou la session
+    active_tab = request.args.get('tab')
+    if not active_tab:
+        # Essayer depuis la session
+        session_key = f'machine_{machine_id}_tab'
+        active_tab = session.get(session_key, 'checklists')
+    # Valider que l'onglet est valide
+    valid_tabs = ['checklists', 'corrective', 'preventive', 'documentation']
+    if active_tab not in valid_tabs:
+        active_tab = 'checklists'
+    # Stocker dans la session
+    session_key = f'machine_{machine_id}_tab'
+    session[session_key] = active_tab
+    
     return render_template(
         "machine_detail.html",
         machine=machine,
@@ -1296,6 +1338,7 @@ def machine_detail(machine_id):
         templates=templates,
         template_progress=template_progress,
         children=children,
+        active_tab=active_tab,
         documents=documents,
         checklist_templates=checklist_templates,
         checklist_instances=checklist_instances,
@@ -1317,12 +1360,12 @@ def upload_machine_document(machine_id):
     
     if 'file' not in request.files:
         flash("Aucun fichier sélectionné", "danger")
-        return redirect(url_for("machine_detail", machine_id=machine_id))
+        return redirect(get_machine_detail_url(machine_id, 'documentation'))
     
     file = request.files['file']
     if file.filename == '':
         flash("Aucun fichier sélectionné", "danger")
-        return redirect(url_for("machine_detail", machine_id=machine_id))
+        return redirect(get_machine_detail_url(machine_id, 'documentation'))
     
     if file and allowed_file(file.filename):
         # Sécuriser le nom du fichier
@@ -1355,7 +1398,7 @@ def upload_machine_document(machine_id):
     else:
         flash("Seuls les fichiers PDF sont autorisés", "danger")
     
-    return redirect(url_for("machine_detail", machine_id=machine_id))
+    return redirect(get_machine_detail_url(machine_id, 'documentation'))
 
 
 @app.route("/machines/<int:machine_id>/documents/<int:document_id>/delete", methods=["POST"])
@@ -1366,7 +1409,7 @@ def delete_machine_document(machine_id, document_id):
     
     if document.machine_id != machine_id:
         flash("Ce document n'appartient pas à cette machine", "danger")
-        return redirect(url_for("machine_detail", machine_id=machine_id))
+        return redirect(get_machine_detail_url(machine_id, 'documentation'))
     
     # Supprimer le fichier physique
     try:
@@ -1384,7 +1427,7 @@ def delete_machine_document(machine_id, document_id):
         db.session.rollback()
         flash(f"Erreur lors de la suppression: {exc}", "danger")
     
-    return redirect(url_for("machine_detail", machine_id=machine_id))
+    return redirect(get_machine_detail_url(machine_id, 'documentation'))
 
 
 @app.route("/machines/<int:machine_id>/documents/<int:document_id>/download")
@@ -1530,7 +1573,7 @@ def edit_checklist_template(machine_id, template_id):
         try:
             db.session.commit()
             flash("Check list modifiée avec succès", "success")
-            return redirect(url_for("machine_detail", machine_id=machine_id))
+            return redirect(get_machine_detail_url(machine_id, 'checklists'))
         except Exception as exc:
             db.session.rollback()
             flash(f"Erreur: {exc}", "danger")
@@ -1560,7 +1603,7 @@ def delete_checklist_template(machine_id, template_id):
         db.session.rollback()
         flash(f"Erreur: {exc}", "danger")
     
-    return redirect(url_for("machine_detail", machine_id=machine_id))
+    return redirect(get_machine_detail_url(machine_id, 'checklists'))
 
 
 @app.route("/machines/<int:machine_id>/checklists/<int:template_id>/fill", methods=["GET", "POST"])
@@ -1605,7 +1648,7 @@ def fill_checklist(machine_id, template_id):
                 machine_id=machine_id
             )
             flash("Check list remplie avec succès", "success")
-            return redirect(url_for("machine_detail", machine_id=machine_id))
+            return redirect(get_machine_detail_url(machine_id, 'checklists'))
         except Exception as exc:
             db.session.rollback()
             flash(f"Erreur: {exc}", "danger")
@@ -1660,6 +1703,12 @@ def new_machine():
 
         if not name or not code:
             flash("Nom et code requis", "danger")
+            return redirect(request.url)
+
+        # Vérifier si le code est déjà utilisé
+        existing = Machine.query.filter_by(code=code).first()
+        if existing:
+            flash("Ce code est déjà utilisé par une autre machine", "danger")
             return redirect(request.url)
 
         parent = Machine.query.get(parent_id) if parent_id else None
@@ -1808,16 +1857,103 @@ def edit_machine(machine_id):
             # On garde les heures pour l'instant
             pass
         
+        # Gérer les compteurs multiples pour les machines racines
+        is_root = not parent
+        if is_root:
+            # Récupérer tous les compteurs existants
+            existing_counters = {c.id: c for c in Counter.query.filter_by(machine_id=machine_id).all()}
+            
+            # Traiter les compteurs du formulaire
+            counter_names_used = set()
+            counter_index = 0
+            while True:
+                counter_id_input = request.form.get(f"counter_id_{counter_index}")
+                counter_name = request.form.get(f"counter_name_{counter_index}", "").strip()
+                counter_value = request.form.get(f"counter_value_{counter_index}")
+                counter_unit = request.form.get(f"counter_unit_{counter_index}", "").strip() or None
+                counter_delete = request.form.get(f"counter_delete_{counter_id_input}") == "1" if counter_id_input else False
+                
+                # Si aucun champ n'existe pour cet index, on a fini
+                if not counter_id_input and not counter_name:
+                    break
+                
+                # Si le compteur est marqué pour suppression
+                if counter_delete and counter_id_input:
+                    counter_id = int(counter_id_input)
+                    if counter_id in existing_counters:
+                        db.session.delete(existing_counters[counter_id])
+                        del existing_counters[counter_id]
+                    counter_index += 1
+                    continue
+                
+                # Si c'est un compteur existant à modifier
+                if counter_id_input and counter_name:
+                    counter_id = int(counter_id_input)
+                    if counter_id in existing_counters:
+                        counter = existing_counters[counter_id]
+                        # Vérifier l'unicité du nom (sauf pour le compteur lui-même)
+                        other_counter = Counter.query.filter_by(machine_id=machine_id, name=counter_name).first()
+                        if other_counter and other_counter.id != counter_id:
+                            flash(f"Le nom de compteur '{counter_name}' est déjà utilisé.", "danger")
+                            db.session.rollback()
+                            return redirect(request.url)
+                        counter.name = counter_name
+                        try:
+                            counter.value = float(counter_value) if counter_value else 0.0
+                        except (ValueError, TypeError):
+                            counter.value = 0.0
+                        counter.unit = counter_unit
+                        del existing_counters[counter_id]  # Retirer de la liste des existants
+                    counter_index += 1
+                    continue
+                
+                # Si c'est un nouveau compteur
+                if not counter_id_input and counter_name:
+                    # Vérifier l'unicité du nom
+                    if counter_name in counter_names_used:
+                        flash(f"Le nom de compteur '{counter_name}' est en double dans le formulaire.", "danger")
+                        db.session.rollback()
+                        return redirect(request.url)
+                    existing = Counter.query.filter_by(machine_id=machine_id, name=counter_name).first()
+                    if existing:
+                        flash(f"Un compteur avec le nom '{counter_name}' existe déjà.", "danger")
+                        db.session.rollback()
+                        return redirect(request.url)
+                    counter_names_used.add(counter_name)
+                    
+                    try:
+                        value = float(counter_value) if counter_value else 0.0
+                    except (ValueError, TypeError):
+                        value = 0.0
+                    
+                    counter = Counter(
+                        machine_id=machine_id,
+                        name=counter_name,
+                        value=value,
+                        unit=counter_unit
+                    )
+                    db.session.add(counter)
+                counter_index += 1
+            
+            # Supprimer les compteurs qui n'ont pas été modifiés (supprimés du formulaire)
+            for counter_id, counter in existing_counters.items():
+                db.session.delete(counter)
+        
         try:
             db.session.commit()
             flash("Machine modifiée", "success")
-            return redirect(url_for("machine_detail", machine_id=machine.id))
+            return redirect(get_machine_detail_url(machine.id))
         except Exception as exc:
             db.session.rollback()
             flash(f"Erreur: {exc}", "danger")
             return redirect(request.url)
     
-    return render_template("machine_form.html", parents=parents, machine=machine, is_edit=True, stocks=stocks)
+    # Récupérer les compteurs existants si c'est une machine racine
+    existing_counters = []
+    if machine.is_root():
+        existing_counters = Counter.query.filter_by(machine_id=machine_id).order_by(Counter.name).all()
+    
+    return render_template("machine_form.html", parents=parents, machine=machine, is_edit=True, stocks=stocks, existing_counters=existing_counters)
 
 
 @app.route("/machines/<int:machine_id>/delete", methods=["POST"])
@@ -3547,9 +3683,12 @@ def new_maintenance():
         db.session.add(report)
         try:
             db.session.commit()
+            # Créer le MaintenanceProgress pour initialiser "avant maintenance"
+            ensure_all_progress_for_machine(machine)
+            db.session.commit()
             flash("Modèle enregistré", "success")
             if machine_id:
-                return redirect(url_for("machine_detail", machine_id=machine_id))
+                return redirect(get_machine_detail_url(machine_id, 'preventive'))
             return redirect(url_for("new_maintenance"))
         except Exception as exc:
             db.session.rollback()
@@ -3841,7 +3980,7 @@ def fill_maintenance(machine_id, report_id):
     # Vérifier que la machine a un compteur horaire
     if not machine.hour_counter_enabled:
         flash("Seules les machines avec compteur horaire peuvent avoir des plans de maintenance préventive", "danger")
-        return redirect(url_for("machine_detail", machine_id=machine_id))
+        return redirect(get_machine_detail_url(machine_id, 'preventive'))
     
     stocks = Stock.query.order_by(Stock.name).all()
     products = Product.query.order_by(Product.name).all()
@@ -4382,7 +4521,7 @@ def new_corrective_maintenance(machine_id):
                 machine_id=machine.id
             )
             flash("Maintenance corrective enregistrée", "success")
-            return redirect(url_for("machine_detail", machine_id=machine.id))
+            return redirect(get_machine_detail_url(machine.id, 'corrective'))
         except Exception as exc:
             db.session.rollback()
             flash(f"Erreur: {exc}", "danger")
@@ -4963,7 +5102,7 @@ def counter_report(machine_id=None):
             
             # Mettre à jour les hours_since pour TOUS les progress qui existaient avant
             for progress in existing_progress_list:
-                progress.hours_since = max(0.0, progress.hours_since - delta)
+                progress.hours_since = progress.hours_since - delta
                 db.session.add(progress)
             updated += 1
             machines_updated.append(machine.name)
@@ -5011,7 +5150,7 @@ def counter_report(machine_id=None):
                 ).all()
                 
                 for progress in existing_progress_list:
-                    progress.hours_since = max(0.0, progress.hours_since - delta)
+                    progress.hours_since = progress.hours_since - delta
                     db.session.add(progress)
             updated += 1
             machines_updated.append(f"{counter.name} ({root_machine_for_counter.name})")
@@ -5055,6 +5194,146 @@ def counter_report(machine_id=None):
                          root_machine=root_machine,
                          logs=recent_logs, 
                          root_machine_name=root_machine_name)
+
+
+@app.route("/machines/<int:machine_id>/edit-counter-report", methods=["GET", "POST"])
+@admin_required
+def edit_counter_report(machine_id):
+    """Page pour modifier les relevés de compteurs (augmenter ou diminuer)"""
+    machine = Machine.query.get_or_404(machine_id)
+    
+    # Récupérer toutes les machines de l'arborescence avec compteur
+    all_machines_in_tree = get_all_descendants(machine)
+    machines_with_counters = [m for m in all_machines_in_tree if m.hour_counter_enabled]
+    machines_with_counters.sort(key=lambda m: m.name)
+    
+    # Récupérer les compteurs de la machine racine si c'est une machine racine
+    root_counters_by_machine = []
+    root_machine = machine
+    while root_machine.parent:
+        root_machine = root_machine.parent
+    
+    if root_machine.is_root() and root_machine.counters:
+        root_counters = sorted(root_machine.counters, key=lambda c: c.name)
+        root_counters_by_machine = [(root_machine, counter) for counter in root_counters]
+    
+    if not machines_with_counters and not root_counters_by_machine:
+        flash(f"Aucun compteur configuré pour cette machine.", "warning")
+        return redirect(get_machine_detail_url(machine_id))
+    
+    if request.method == "POST":
+        updated = 0
+        machines_updated = []
+        
+        # Traiter les compteurs des machines
+        for m in machines_with_counters:
+            raw_value = request.form.get(f"machine_{m.id}")
+            if raw_value is None or raw_value.strip() == "":
+                continue
+            try:
+                new_hours = float(raw_value)
+            except ValueError:
+                flash(f"Valeur invalide pour {m.name}", "danger")
+                return redirect(request.url)
+            
+            old_hours = m.hours
+            if new_hours == old_hours:
+                continue
+            
+            delta = new_hours - old_hours
+            m.hours = new_hours
+            
+            # Créer un log
+            log = CounterLog(machine=m, previous_hours=old_hours, new_hours=new_hours)
+            db.session.add(log)
+            
+            # Récupérer les progress existants AVANT de créer les nouveaux
+            existing_progress_list = MaintenanceProgress.query.filter_by(machine_id=m.id, counter_id=None).all()
+            
+            # Créer les progress manquants pour cette machine
+            ensure_all_progress_for_machine(m)
+            
+            # Mettre à jour les hours_since UNIQUEMENT pour les progress qui existaient avant
+            # (les nouveaux progress créés auront la valeur initiale correcte)
+            for progress in existing_progress_list:
+                # Si on diminue le compteur (delta négatif), on augmente hours_since
+                # Si on augmente le compteur (delta positif), on diminue hours_since
+                progress.hours_since = progress.hours_since - delta
+                db.session.add(progress)
+            
+            updated += 1
+            machines_updated.append(m.name)
+        
+        # Traiter les compteurs multiples des machines racines
+        for root_machine_for_counter, counter in root_counters_by_machine:
+            raw_value = request.form.get(f"counter_{counter.id}")
+            if raw_value is None or raw_value.strip() == "":
+                continue
+            try:
+                new_value = float(raw_value)
+            except ValueError:
+                flash(f"Valeur invalide pour {counter.name}", "danger")
+                return redirect(request.url)
+            
+            old_value = counter.value
+            if new_value == old_value:
+                continue
+            
+            delta = new_value - old_value
+            counter.value = new_value
+            
+            # Créer un log
+            log = CounterLog(
+                machine=root_machine_for_counter,
+                counter_id=counter.id,
+                previous_hours=old_value,
+                new_hours=new_value
+            )
+            db.session.add(log)
+            
+            # Mettre à jour les progress de maintenance pour toutes les machines de l'arborescence
+            all_machines_in_tree = get_all_descendants(root_machine_for_counter)
+            all_machines_in_tree.append(root_machine_for_counter)
+            
+            for m in all_machines_in_tree:
+                # Récupérer les progress existants AVANT de créer les nouveaux
+                existing_progress_list = MaintenanceProgress.query.filter_by(
+                    machine_id=m.id, 
+                    counter_id=counter.id
+                ).all()
+                
+                # Créer les progress manquants pour cette machine
+                ensure_all_progress_for_machine(m)
+                
+                # Mettre à jour les hours_since UNIQUEMENT pour les progress qui existaient avant
+                # (les nouveaux progress créés auront la valeur initiale correcte)
+                for progress in existing_progress_list:
+                    # Si on diminue le compteur (delta négatif), on augmente hours_since
+                    # Si on augmente le compteur (delta positif), on diminue hours_since
+                    progress.hours_since = progress.hours_since - delta
+                    db.session.add(progress)
+            
+            updated += 1
+            machines_updated.append(f"{counter.name} ({root_machine_for_counter.name})")
+        
+        if updated == 0:
+            flash("Aucune modification détectée.", "warning")
+            return redirect(request.url)
+        
+        try:
+            db.session.commit()
+            flash(f"Relevé modifié pour {len(machines_updated)} compteur(s): {', '.join(machines_updated)}", "success")
+            return redirect(get_machine_detail_url(machine_id))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Erreur lors de la modification: {exc}", "danger")
+            return redirect(request.url)
+    
+    return render_template("edit_counter_report.html", 
+                         machine=machine,
+                         machines=machines_with_counters, 
+                         root_counters_by_machine=root_counters_by_machine,
+                         root_machine=root_machine)
 
 
 @app.route("/counter-logs")

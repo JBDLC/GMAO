@@ -49,7 +49,10 @@ if database_url:
     # Render fournit DATABASE_URL au format postgresql://user:pass@host/dbname
     # SQLAlchemy attend postgresql:// mais certaines versions utilisent postgres://
     if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgresql://"):
+        # Forcer l'utilisation de psycopg (v3) au lieu de psycopg2
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 else:
     # Mode local avec SQLite

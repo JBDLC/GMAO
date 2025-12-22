@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Nouvel utilisateur{% endblock %}
+{% block title %}{{ t('Nouvel utilisateur') }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -93,36 +93,36 @@
 <div class="page-header">
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-1">
-      <li class="breadcrumb-item"><a href="{{ url_for('users') }}">Utilisateurs</a></li>
-      <li class="breadcrumb-item active" aria-current="page">Nouvel utilisateur</li>
+      <li class="breadcrumb-item"><a href="{{ url_for('users') }}">{{ t('Utilisateurs') }}</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ t('Nouvel utilisateur') }}</li>
     </ol>
   </nav>
-  <h1 class="page-title">Créer un utilisateur</h1>
+  <h1 class="page-title">{{ t('Créer un utilisateur') }}</h1>
 </div>
 
 <div class="form-card">
 <form method="post">
   <div class="mb-3">
-    <label class="form-label">Identifiant</label>
+    <label class="form-label">{{ t('Identifiant') }}</label>
     <input class="form-control" type="text" name="username" required autofocus />
   </div>
   <div class="mb-3">
-    <label class="form-label">Mot de passe</label>
+    <label class="form-label">{{ t('Mot de passe') }}</label>
     <input class="form-control" type="password" name="password" required />
   </div>
   <div class="mb-3">
-    <label class="form-label">Type</label>
+    <label class="form-label">{{ t('Type') }}</label>
     <select class="form-select" name="user_type" required>
-      <option value="">Sélectionnez un type...</option>
-      <option value="admin">Admin</option>
-      <option value="gestionnaire">Gestionnaire</option>
-      <option value="spectateur">Spectateur</option>
-      <option value="technicien">Technicien</option>
+      <option value="">{{ t('Sélectionnez un type...') }}</option>
+      <option value="admin">{{ t('Admin') }}</option>
+      <option value="gestionnaire">{{ t('Gestionnaire') }}</option>
+      <option value="spectateur">{{ t('Spectateur') }}</option>
+      <option value="technicien">{{ t('Technicien') }}</option>
     </select>
   </div>
   <div class="mt-4">
-    <button class="btn btn-success">Créer</button>
-    <a class="btn btn-secondary" href="{{ url_for('users') }}">Annuler</a>
+    <button class="btn btn-success">{{ t('Créer') }}</button>
+    <a class="btn btn-secondary" href="{{ url_for('users') }}">{{ t('Annuler') }}</a>
   </div>
 </form>
 </div>

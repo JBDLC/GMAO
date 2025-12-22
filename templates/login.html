@@ -151,7 +151,7 @@
         
         <form method="post" id="loginForm">
           <div class="mb-3">
-            <label class="form-label" for="username">Identifiant</label>
+            <label class="form-label" for="username">{{ t('Identifiant') }}</label>
             <input 
               class="form-control" 
               type="text" 
@@ -159,24 +159,24 @@
               id="username"
               required 
               autofocus 
-              placeholder="Entrez votre identifiant"
+              placeholder="{{ t('Entrez votre identifiant') }}"
             />
           </div>
           <div class="mb-3">
-            <label class="form-label" for="password">Mot de passe</label>
+            <label class="form-label" for="password">{{ t('Mot de passe') }}</label>
             <input 
               class="form-control" 
               type="password" 
               name="password" 
               id="password"
               required 
-              placeholder="Entrez votre mot de passe"
+              placeholder="{{ t('Entrez votre mot de passe') }}"
             />
           </div>
-          <button class="btn btn-login" type="submit">Se connecter</button>
+          <button class="btn btn-login" type="submit">{{ t('Se connecter') }}</button>
         </form>
         <div class="help-text">
-          <p>Compte par défaut : admin123 / 123</p>
+          <p>{{ t('Compte par défaut : admin123 / 123') }}</p>
         </div>
       </div>
     </div>

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Suivi M&Ms') }}{% endblock %}
+
+{% macro render_machine_option(machine, selected_id, prefix='') %}
+  <option value="{{ machine.id }}" {% if selected_id == machine.id %}selected{% endif %}>
+    {{ prefix }}{{ machine.name }} ({{ machine.code }})
+  </option>
+  {% for child in machine.children|sort(attribute='name') %}
+    {{ render_machine_option(child, selected_id, prefix + '└─ ') }}
+  {% endfor %}
+{% endmacro %}
+
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .filter-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  .table thead th {
+    color: #1a3b50;
+    font-weight: 600;
+    border-bottom: 2px solid #1a3b50;
+    background: #f8f9fa;
+  }
+  .badge {
+    padding: 0.4rem 0.8rem;
+    font-weight: 500;
+  }
+</style>
+
+<div class="page-header">
+  <h1 class="page-title">{{ t('Suivi M&Ms') }}</h1>
+  <p class="text-muted mt-2">{{ t('Liste des actions réalisées : maintenances préventives, maintenances correctives, check-lists et relevés de compteurs') }}</p>
+</div>
+
+<div class="filter-card">
+  <form method="get" class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">{{ t('Type de document') }}</label>
+      <select class="form-select" name="filter_type">
+        <option value="">{{ t('Tous') }}</option>
+        <option value="preventive" {% if filter_type == 'preventive' %}selected{% endif %}>{{ t('Maintenance préventive') }}</option>
+        <option value="corrective" {% if filter_type == 'corrective' %}selected{% endif %}>{{ t('Maintenance corrective') }}</option>
+        <option value="checklist" {% if filter_type == 'checklist' %}selected{% endif %}>{{ t('Check-list') }}</option>
+        <option value="counter" {% if filter_type == 'counter' %}selected{% endif %}>{{ t('Relevé compteurs') }}</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">{{ t('Machine') }}</label>
+      <select class="form-select" name="filter_machine_id">
+        <option value="">{{ t('Toutes les machines') }}</option>
+        {% for root in root_machines %}
+          {{ render_machine_option(root, filter_machine_id) }}
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">{{ t('Date début') }}</label>
+      <input type="date" class="form-control" name="filter_date_start" value="{{ filter_date_start }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">{{ t('Date fin') }}</label>
+      <input type="date" class="form-control" name="filter_date_end" value="{{ filter_date_end }}">
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button type="submit" class="btn btn-primary w-100">{{ t('Filtrer') }}</button>
+    </div>
+  </form>
+</div>
+
+{% if actions %}
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>{{ t('Type') }}</th>
+        <th>{{ t('Nom') }}</th>
+        <th>{{ t('Date') }}</th>
+        <th>{{ t('Machine') }}</th>
+        <th>{{ t('Code') }}</th>
+        <th>{{ t('Utilisateurs') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for action in actions %}
+      <tr>
+        <td>
+          {% if action.type == 'preventive' %}
+          <span class="badge bg-primary">{{ action.type_label }}</span>
+          {% elif action.type == 'corrective' %}
+          <span class="badge bg-warning text-dark">{{ action.type_label }}</span>
+          {% elif action.type == 'checklist' %}
+          <span class="badge bg-info">{{ action.type_label }}</span>
+          {% elif action.type == 'counter' %}
+          <span class="badge bg-secondary">{{ action.type_label }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ action.url }}" class="text-decoration-none">{{ action.name }}</a>
+        </td>
+        <td>{{ action.date.strftime("%d/%m/%Y %H:%M") }}</td>
+        <td>{{ action.machine.name }}</td>
+        <td>{{ action.machine.code }}</td>
+        <td>{{ action.user.username if action.user else '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <p class="mb-0">{{ t('Aucune action trouvée') }}{% if filter_type or filter_machine_id or filter_date_start or filter_date_end %} {{ t('correspondant aux filtres') }}{% endif %}.</p>
+</div>
+{% endif %}
+{% endblock %}
+

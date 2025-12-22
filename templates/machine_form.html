@@ -139,6 +139,22 @@
       {% endfor %}
     </select>
   </div>
+  
+  <!-- Sélecteur de couleur (machines racines uniquement) -->
+  <div class="mb-3 d-none" id="colorSection">
+    <div class="d-flex align-items-center gap-3">
+      <label class="form-label mb-0" style="min-width: 120px;">Couleur:</label>
+      <div class="d-flex flex-wrap gap-2" id="colorPicker">
+        {% for i in range(10) %}
+        <label class="color-option" style="cursor: pointer; position: relative;">
+          <input type="radio" name="color_index" value="{{ i }}" class="d-none" {% if is_edit and machine and machine.color_index == i %}checked{% elif not is_edit and i == 0 %}checked{% endif %}>
+          <div class="color-preview" data-color-index="{{ i }}" style="width: 32px; height: 32px; border-radius: 6px; border: 2px solid transparent; transition: all 0.2s;"></div>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  
   <div class="mb-3">
     <label class="form-label">Stock associé (optionnel)</label>
     <select class="form-select" name="stock_id">
@@ -164,7 +180,7 @@
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">Compteur {{ loop.index }}</h6>
-              <button type="button" class="btn btn-sm btn-outline-danger remove-counter" data-index="{{ loop.index0 }}">🗑️</button>
+              <button type="button" class="btn btn-sm btn-outline-danger remove-counter" data-index="{{ loop.index0 }}"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
             </div>
             <input type="hidden" name="counter_id_{{ loop.index0 }}" value="{{ counter.id }}" />
             <div class="row g-3">
@@ -229,7 +245,7 @@
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="mb-0">Compteur ${index + 1}</h6>
-            <button type="button" class="btn btn-sm btn-outline-danger remove-counter" data-index="${index}">🗑️</button>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-counter" data-index="${index}"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
           </div>
           <div class="row g-3">
             <div class="col-md-4">
@@ -278,18 +294,23 @@
     if (!parentSelect) return;
     
     const isRoot = !parentSelect.value;
+    const colorSection = document.getElementById("colorSection");
     
-    if (isRoot && multipleCountersSection && countersContainer) {
-      // Machine racine : afficher la section compteurs multiples
-      multipleCountersSection.classList.remove("d-none");
-      if (singleCounterSection) singleCounterSection.classList.add("d-none");
-      
-      // Ajouter un premier compteur si le conteneur est vide (uniquement en mode création)
-      if (!isEditMode && countersContainer.children.length === 0) {
-        addCounter();
+    if (isRoot) {
+      // Machine racine : afficher la section couleur et compteurs multiples
+      if (colorSection) colorSection.classList.remove("d-none");
+      if (multipleCountersSection && countersContainer) {
+        multipleCountersSection.classList.remove("d-none");
+        if (singleCounterSection) singleCounterSection.classList.add("d-none");
+        
+        // Ajouter un premier compteur si le conteneur est vide (uniquement en mode création)
+        if (!isEditMode && countersContainer.children.length === 0) {
+          addCounter();
+        }
       }
     } else {
-      // Sous-machine : afficher la section compteur unique
+      // Sous-machine : masquer la section couleur et afficher la section compteur unique
+      if (colorSection) colorSection.classList.add("d-none");
       if (multipleCountersSection) multipleCountersSection.classList.add("d-none");
       if (singleCounterSection) singleCounterSection.classList.remove("d-none");
       if (countersContainer && !isEditMode) {
@@ -336,13 +357,69 @@
     addCounterBtn.addEventListener("click", addCounter);
   }
   
+  // Initialiser les couleurs - utiliser les mêmes couleurs que dans machines.html
+  const colorPreviews = document.querySelectorAll('.color-preview');
+  // Les couleurs doivent correspondre exactement à celles définies dans machines.html (tree-level-0)
+  const colorGradients = [
+    ['#2d5016', '#1e340f'], // 0 - Vert foncé
+    ['#6a1b9a', '#4a148c'], // 1 - Violet
+    ['#e65100', '#bf360c'], // 2 - Orange
+    ['#c62828', '#b71c1c'], // 3 - Rouge
+    ['#00695c', '#004d40'], // 4 - Turquoise
+    ['#c2185b', '#880e4f'], // 5 - Rose
+    ['#283593', '#1a237e'], // 6 - Indigo
+    ['#5d4037', '#3e2723'], // 7 - Marron
+    ['#1b5e20', '#0d3e11'], // 8 - Vert menthe
+    ['#f57c00', '#e65100']  // 9 - Ambre
+  ];
+  
+  colorPreviews.forEach((preview) => {
+    // Récupérer l'index depuis l'attribut data-color-index
+    const colorIndex = parseInt(preview.getAttribute('data-color-index'));
+    if (isNaN(colorIndex) || colorIndex < 0 || colorIndex >= colorGradients.length) {
+      return; // Ignorer si l'index n'est pas valide
+    }
+    
+    const gradient = colorGradients[colorIndex];
+    preview.style.background = `linear-gradient(135deg, ${gradient[0]} 0%, ${gradient[1]} 100%)`;
+    
+    // Ajouter un style pour la sélection
+    const radio = preview.closest('label').querySelector('input[type="radio"]');
+    if (radio && radio.checked) {
+      preview.style.borderColor = '#1a3b50';
+      preview.style.transform = 'scale(1.15)';
+      preview.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    }
+    
+    // Gérer le clic
+    preview.addEventListener('click', function() {
+      // Désélectionner tous les autres
+      colorPreviews.forEach(p => {
+        p.style.borderColor = 'transparent';
+        p.style.transform = 'scale(1)';
+        p.style.boxShadow = 'none';
+      });
+      // Sélectionner celui-ci
+      this.style.borderColor = '#1a3b50';
+      this.style.transform = 'scale(1.15)';
+      this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+      if (radio) {
+        radio.checked = true;
+      }
+    });
+  });
+  
   // Initialiser au chargement
   if (isEditMode) {
     // En mode édition, vérifier si la machine est racine
     const isRoot = !parentSelect || !parentSelect.value;
-    if (isRoot && multipleCountersSection) {
-      multipleCountersSection.classList.remove("d-none");
-      if (singleCounterSection) singleCounterSection.classList.add("d-none");
+    const colorSection = document.getElementById("colorSection");
+    if (isRoot) {
+      if (colorSection) colorSection.classList.remove("d-none");
+      if (multipleCountersSection) {
+        multipleCountersSection.classList.remove("d-none");
+        if (singleCounterSection) singleCounterSection.classList.add("d-none");
+      }
     }
   } else {
     updateCounterSections();

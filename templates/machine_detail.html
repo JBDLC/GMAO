@@ -1,104 +1,443 @@
 {% extends "base.html" %}
 {% block title %}{{ machine.name }}{% endblock %}
 {% block content %}
-<!-- Arborescence moderne -->
-<div class="card mb-4 border-0 shadow-sm">
-  <div class="card-body py-3">
-    <nav aria-label="breadcrumb" class="mb-2">
+
+<style>
+  .machine-detail-header {
+    background: linear-gradient(135deg, #1a3b50 0%, #2a5a7a 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .machine-detail-header h1 {
+    color: white;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 2rem;
+  }
+  
+  .machine-detail-header .machine-code {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.1rem;
+    font-weight: 400;
+  }
+  
+  .machine-info-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+  
+  .machine-info-badge {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    color: white;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .machine-actions-header {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+  }
+  
+  .machine-actions-header .btn {
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  
+  .machine-actions-header .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  }
+  
+  .breadcrumb-modern {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .breadcrumb-modern .breadcrumb {
+    margin: 0;
+    background: none;
+    padding: 0;
+  }
+  
+  .breadcrumb-modern .breadcrumb-item a {
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+  }
+  
+  .breadcrumb-modern .breadcrumb-item.active {
+    color: white;
+    font-weight: 600;
+  }
+  
+  .section-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    transition: box-shadow 0.3s;
+  }
+  
+  .section-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+  
+  .section-card-header {
+    background: #f8f9fa;
+    border-bottom: 2px solid #e9ecef;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .section-card-header h5 {
+    margin: 0;
+    font-weight: 600;
+    color: #1a3b50;
+    font-size: 1.1rem;
+  }
+  
+  .section-card-body {
+    padding: 1.5rem;
+  }
+  
+  .nav-tabs-modern {
+    border-bottom: 2px solid #e9ecef;
+    padding: 0 1.5rem;
+    background: #f8f9fa;
+  }
+  
+  .nav-tabs-modern .nav-link {
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #6c757d;
+    font-weight: 500;
+    padding: 1rem 1.5rem;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+  }
+  
+  .nav-tabs-modern .nav-link:hover {
+    color: #1a3b50;
+    background: transparent;
+    border-bottom-color: #dee2e6;
+  }
+  
+  .nav-tabs-modern .nav-link.active {
+    color: #1a3b50;
+    background: transparent;
+    border-bottom-color: #1a3b50;
+    font-weight: 600;
+  }
+  
+  .child-machine-card {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.2s;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  
+  .child-machine-card:hover {
+    border-color: #1a3b50;
+    background: #f8f9fa;
+    transform: translateX(4px);
+    text-decoration: none;
+    color: inherit;
+  }
+  
+  .child-machine-card strong {
+    color: #1a3b50;
+    font-size: 1rem;
+  }
+  
+  .template-card {
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+    background: white;
+  }
+  
+  .template-card:hover {
+    border-color: #1a3b50;
+    box-shadow: 0 4px 12px rgba(26, 59, 80, 0.1);
+    transform: translateY(-2px);
+  }
+  
+  .template-card.border-danger {
+    border-color: #dc3545;
+    background: #fff5f5;
+  }
+  
+  .template-card.border-warning {
+    border-color: #ffc107;
+    background: #fffbf0;
+  }
+  
+  .template-card-title {
+    font-weight: 600;
+    color: #1a3b50;
+    margin-bottom: 0.75rem;
+    font-size: 1.05rem;
+  }
+  
+  .template-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .list-item-modern {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.2s;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  
+  .list-item-modern:hover {
+    border-color: #1a3b50;
+    background: #f8f9fa;
+    transform: translateX(4px);
+    text-decoration: none;
+    color: inherit;
+  }
+  
+  .list-item-modern strong {
+    color: #1a3b50;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+  
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6c757d;
+  }
+  
+  .empty-state-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+  
+  .btn-modern {
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s;
+  }
+  
+  .btn-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  .counter-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .counter-display .badge {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+  }
+  
+  @media (max-width: 768px) {
+    .machine-detail-header {
+      padding: 1.5rem;
+    }
+    
+    .machine-detail-header h1 {
+      font-size: 1.5rem;
+    }
+    
+    .machine-actions-header {
+      flex-direction: column;
+    }
+    
+    .machine-actions-header .btn {
+      width: 100%;
+    }
+    
+    .section-card-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    
+    .nav-tabs-modern {
+      padding: 0;
+    }
+    
+    .nav-tabs-modern .nav-link {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+  }
+</style>
+
+<!-- Header moderne -->
+<div class="machine-detail-header">
+  <div class="breadcrumb-modern">
+    <nav aria-label="breadcrumb">
       <ol class="breadcrumb mb-0" style="--bs-breadcrumb-divider: '›';">
         <li class="breadcrumb-item">
-          <a href="{{ url_for('machines') }}" class="text-decoration-none">{{ t('Machines') }}</a>
+          <a href="{{ url_for('machines') }}">{{ t('Machines') }}</a>
         </li>
         {% for node in machine_lineage(machine) %}
           {% if loop.last %}
           <li class="breadcrumb-item active" aria-current="page">
-            <strong>{{ node.name }}</strong>
+            {{ node.name }}
             {% if node.code %}
             <span class="text-muted ms-1">({{ node.code }})</span>
             {% endif %}
           </li>
           {% else %}
           <li class="breadcrumb-item">
-            <a href="{{ url_for('machine_detail', machine_id=node.id) }}" class="text-decoration-none">{{ node.name }}</a>
+            <a href="{{ url_for('machine_detail', machine_id=node.id) }}">{{ node.name }}</a>
           </li>
           {% endif %}
         {% endfor %}
       </ol>
     </nav>
-    <div class="d-flex justify-content-between align-items-center">
-      <div>
-        <h2 class="mb-0">{{ machine.name }}</h2>
+  </div>
+  
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+    <div>
+      <h1>{{ machine.name }}</h1>
+      {% if machine.code %}
+      <div class="machine-code">{{ machine.code }}</div>
+      {% endif %}
+      
+      <div class="machine-info-badges">
         {% if machine.is_root() and machine.counters %}
-        <p class="text-muted mb-0 mt-1">
           {% for counter in machine.counters %}
-          <span class="badge bg-info me-1">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+          <div class="machine-info-badge">
+            {{ icon_svg('counter', 18) }}
+            <span>{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+          </div>
           {% endfor %}
-        </p>
         {% elif machine.hour_counter_enabled %}
-        <p class="text-muted mb-0 mt-1">
-          <span class="badge bg-info">{{ "%.1f"|format(machine.hours) }} {{ machine.counter_unit or 'h' }}</span>
-        </p>
+        <div class="machine-info-badge">
+          {{ icon_svg('counter', 18) }}
+          <span>{{ "%.1f"|format(machine.hours) }} {{ machine.counter_unit or 'h' }}</span>
+        </div>
         {% endif %}
       </div>
-      <div class="btn-group">
-        <a href="{{ url_for('machine_qrcode', machine_id=machine.id) }}" class="btn btn-outline-secondary" title="{{ t('Voir le QR code') }}" target="_blank">📱 {{ t('QR Code') }}</a>
-        {% if current_user.user_type == 'admin' %}
+    </div>
+    
+    <div class="machine-actions-header">
+      {% if can_access_qrcode() %}
+      <a href="{{ url_for('machine_qrcode', machine_id=machine.id) }}" class="btn btn-light" target="_blank" title="{{ t('Voir le QR code') }}">
+        {{ icon_svg('qrcode', 18) }} {{ t('QR Code') }}
+      </a>
+      {% endif %}
+      {% if can_edit_machines_maintenances() and not is_readonly_machines_maintenances() %}
         {% if machine.hour_counter_enabled or (machine.is_root() and machine.counters) %}
-        <a href="{{ url_for('counter_report', machine_id=machine.id) }}" class="btn btn-outline-info" title="{{ t('Relevé de compteur') }}">📊 {{ t('Relevé') }}</a>
+        <a href="{{ url_for('counter_report', machine_id=machine.id) }}" class="btn btn-light" title="{{ t('Relevé de compteur') }}">
+          {{ icon_svg('counter', 18) }} {{ t('Relevé') }}
+        </a>
         {% endif %}
-        {% if machine.is_root() %}
-        <a href="{{ url_for('machine_counters', machine_id=machine.id) }}" class="btn btn-outline-info" title="{{ t('Gérer les compteurs') }}">⚙️ {{ t('Compteurs') }}</a>
+        {% if machine.is_root() and can_edit_machines() %}
+        <a href="{{ url_for('machine_counters', machine_id=machine.id) }}" class="btn btn-light" title="{{ t('Gérer les compteurs') }}">
+          {{ icon_svg('settings', 18) }} {{ t('Compteurs') }}
+        </a>
         {% endif %}
-        <a href="{{ url_for('edit_machine', machine_id=machine.id) }}" class="btn btn-outline-primary" title="{{ t('Modifier') }}">✏️</a>
+        {% if can_edit_machines() %}
+        <a href="{{ url_for('edit_machine', machine_id=machine.id) }}" class="btn btn-light" title="{{ t('Modifier') }}">
+          {{ icon_svg('edit', 18) }}
+        </a>
+        {% endif %}
+        {% if can_delete_machines() %}
         <form method="post" action="{{ url_for('delete_machine', machine_id=machine.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.') }}');">
-          <button type="submit" class="btn btn-outline-danger" title="{{ t('Supprimer') }}">🗑️</button>
+          <button type="submit" class="btn btn-light" title="{{ t('Supprimer') }}">
+            {{ icon_svg('delete', 18) }}
+          </button>
         </form>
         {% endif %}
-      </div>
+      {% endif %}
     </div>
   </div>
 </div>
 
 <!-- Sous-machines -->
 {% if children %}
-<div class="card mb-4">
-  <div class="card-header">
-    <h5 class="mb-0">{{ t('Sous-machines') }}</h5>
+<div class="section-card">
+  <div class="section-card-header">
+    <h5>{{ t('Sous-machines') }}</h5>
   </div>
-  <div class="card-body">
-    <div class="list-group list-group-flush">
-      {% for child in children %}
-      <div class="list-group-item d-flex justify-content-between align-items-center" style="font-size: 0.875rem;">
-        <a href="{{ url_for('machine_detail', machine_id=child.id) }}" class="text-decoration-none flex-grow-1">
-          <div>
-            <strong style="font-size: 0.875rem;">{{ child.name }}</strong>
-            <div class="text-muted" style="font-size: 0.75rem;">{{ child.code }}</div>
-          </div>
-        </a>
-        <div class="d-flex align-items-center">
+  <div class="section-card-body">
+    {% for child in children %}
+    <a href="{{ url_for('machine_detail', machine_id=child.id) }}" class="child-machine-card">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <strong>{{ child.name }}</strong>
+          <div class="text-muted small mt-1">{{ child.code }}</div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
           {% if child.hour_counter_enabled %}
-          <span class="badge bg-info me-2">{{ "%.1f"|format(child.hours) }} {{ child.counter_unit or 'h' }}</span>
+          <span class="badge bg-info">{{ "%.1f"|format(child.hours) }} {{ child.counter_unit or 'h' }}</span>
           {% endif %}
-          {% if current_user.user_type == 'admin' %}
+          {% if can_edit_machines() and not is_readonly_machines_maintenances() %}
           <div class="btn-group">
-            <a href="{{ url_for('edit_machine', machine_id=child.id) }}" class="btn btn-sm btn-outline-primary" title="{{ t('Modifier') }}">✏️</a>
-            <form method="post" action="{{ url_for('delete_machine', machine_id=child.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cette sous-machine ? Cette action est irréversible.') }}');">
-              <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer') }}">🗑️</button>
+            {% if can_edit_machines() %}
+            <a href="{{ url_for('edit_machine', machine_id=child.id) }}" class="btn btn-sm btn-outline-primary" title="{{ t('Modifier') }}" onclick="event.stopPropagation(); event.preventDefault(); window.location.href='{{ url_for('edit_machine', machine_id=child.id) }}';">
+              {{ icon_svg('edit', 16) }}
+            </a>
+            {% endif %}
+            {% if can_delete_machines() %}
+            <form method="post" action="{{ url_for('delete_machine', machine_id=child.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cette sous-machine ? Cette action est irréversible.') }}');" onclick="event.stopPropagation();">
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer') }}">
+                {{ icon_svg('delete', 16) }}
+              </button>
             </form>
+            {% endif %}
           </div>
           {% endif %}
         </div>
       </div>
-      {% endfor %}
-    </div>
+    </a>
+    {% endfor %}
   </div>
 </div>
 {% endif %}
 
 <!-- Onglets -->
-<div class="card mb-4">
-  <div class="card-header p-0">
-    <ul class="nav nav-tabs card-header-tabs" role="tablist">
+<div class="section-card">
+  <div class="nav-tabs-modern">
+    <ul class="nav nav-tabs border-0" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link {% if active_tab == 'checklists' %}active{% endif %}" id="checklists-tab" data-bs-toggle="tab" data-bs-target="#checklists" type="button" role="tab" aria-controls="checklists" aria-selected="{% if active_tab == 'checklists' %}true{% else %}false{% endif %}" data-tab="checklists">
           {{ t('Check-list') }}
@@ -121,287 +460,283 @@
       </li>
     </ul>
   </div>
-  <div class="card-body">
-    <div class="tab-content" id="machineTabsContent">
-      <!-- Onglet 1: Check lists -->
-      <div class="tab-pane fade {% if active_tab == 'checklists' %}show active{% endif %}" id="checklists" role="tabpanel" aria-labelledby="checklists-tab">
+  
+  <div class="tab-content" id="machineTabsContent">
+    <!-- Onglet 1: Check lists -->
+    <div class="tab-pane fade {% if active_tab == 'checklists' %}show active{% endif %}" id="checklists" role="tabpanel" aria-labelledby="checklists-tab">
+      <div class="section-card-body">
         <!-- Modèles de check lists -->
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">{{ t('Modèles de check lists') }}</h5>
-            {% if current_user.user_type == 'admin' %}
-            <a href="{{ url_for('new_checklist_template', machine_id=machine.id) }}" class="btn btn-sm btn-primary">
+        <div class="mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0 fw-semibold">{{ t('Modèles de check lists') }}</h6>
+            {% if can_create_checklist() and not is_readonly_machines_maintenances() %}
+            <a href="{{ url_for('new_checklist_template', machine_id=machine.id) }}" class="btn btn-primary btn-sm btn-modern">
               + {{ t('Nouvelle check list') }}
             </a>
             {% endif %}
           </div>
-          <div class="card-body">
-            {% if checklist_templates %}
-            <div class="row g-3">
-              {% for template in checklist_templates %}
-              <div class="col-md-6">
-                <div class="card">
-                  <div class="card-body">
-                    <h6 class="card-title">{{ template.name }}</h6>
-                    <p class="card-text small text-muted mb-2">
-                      {{ template.items|length }} {{ t('élément(s)') }}
-                      {% if template.instances %}
-                      · {{ template.instances|length }} {{ t('remplissage(s)') }}
-                      {% endif %}
-                    </p>
-                    <div class="btn-group w-100" role="group">
-                      {% if current_user.user_type in ['admin', 'technicien'] %}
-                      <a href="{{ url_for('fill_checklist', machine_id=machine.id, template_id=template.id) }}" class="btn btn-success btn-sm">{{ t('Remplir') }}</a>
-                      {% endif %}
-                      {% if template.instances %}
-                      <a href="{{ url_for('checklist_instances_list', machine_id=machine.id, template_id=template.id) }}" class="btn btn-outline-info btn-sm">{{ t('Historique') }}</a>
-                      {% endif %}
-                      {% if current_user.user_type == 'admin' %}
-                      <a href="{{ url_for('edit_checklist_template', machine_id=machine.id, template_id=template.id) }}" class="btn btn-outline-primary btn-sm">✏️</a>
-                      <form method="post" action="{{ url_for('delete_checklist_template', machine_id=machine.id, template_id=template.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cette check list ?') }}');">
-                        <button type="submit" class="btn btn-outline-danger btn-sm">🗑️</button>
-                      </form>
-                      {% endif %}
-                    </div>
-                  </div>
+          
+          {% if checklist_templates %}
+          <div class="row g-3">
+            {% for template in checklist_templates %}
+            <div class="col-md-6">
+              <div class="template-card">
+                <div class="template-card-title">{{ template.name }}</div>
+                <div class="template-badges">
+                  <span class="badge bg-secondary">{{ template.items|length }} {{ t('élément(s)') }}</span>
+                  {% if template.instances %}
+                  <span class="badge bg-info">{{ template.instances|length }} {{ t('remplissage(s)') }}</span>
+                  {% endif %}
+                </div>
+                <div class="btn-group w-100" role="group">
+                  {% if can_edit_machines_maintenances() and not is_readonly_machines_maintenances() %}
+                  <a href="{{ url_for('fill_checklist', machine_id=machine.id, template_id=template.id) }}" class="btn btn-success btn-sm">{{ t('Remplir') }}</a>
+                  {% endif %}
+                  {% if template.instances %}
+                  <a href="{{ url_for('checklist_instances_list', machine_id=machine.id, template_id=template.id) }}" class="btn btn-outline-info btn-sm">{{ t('Historique') }}</a>
+                  {% endif %}
+                  {% if can_edit_machines() and not is_readonly_machines_maintenances() %}
+                  <a href="{{ url_for('edit_checklist_template', machine_id=machine.id, template_id=template.id) }}" class="btn btn-outline-primary btn-sm">{{ icon_svg('edit', 16) }}</a>
+                  {% if can_delete_machines() %}
+                  <form method="post" action="{{ url_for('delete_checklist_template', machine_id=machine.id, template_id=template.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cette check list ?') }}');">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">{{ icon_svg('delete', 16) }}</button>
+                  </form>
+                  {% endif %}
+                  {% endif %}
                 </div>
               </div>
-              {% endfor %}
             </div>
-            {% else %}
-            <p class="text-muted mb-0 text-center py-3">{{ t('Aucune check list disponible pour cette machine.') }}</p>
-            {% if current_user.user_type == 'admin' %}
-            <div class="text-center">
-              <a href="{{ url_for('new_checklist_template', machine_id=machine.id) }}" class="btn btn-primary">{{ t('Créer une check list') }}</a>
-            </div>
-            {% endif %}
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state">
+            <div class="empty-state-icon">{{ icon_svg('alert-circle', 48) }}</div>
+            <p class="mb-3">{{ t('Aucune check list disponible pour cette machine.') }}</p>
+            {% if can_create_checklist() and not is_readonly_machines_maintenances() %}
+            <a href="{{ url_for('new_checklist_template', machine_id=machine.id) }}" class="btn btn-primary btn-modern">{{ t('Créer une check list') }}</a>
             {% endif %}
           </div>
+          {% endif %}
         </div>
 
         <!-- Historique des check lists remplies -->
         {% if checklist_instances %}
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">{{ t('Check lists effectuées') }}</h5>
-          </div>
-          <div class="card-body">
-            <div class="list-group list-group-flush">
-              {% for instance in checklist_instances %}
-              <a href="{{ url_for('checklist_instance_detail', machine_id=machine.id, template_id=instance.template_id, instance_id=instance.id) }}" class="list-group-item list-group-item-action">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div class="flex-grow-1">
-                    <strong>{{ instance.template.name }}</strong>
-                    {% if instance.comment %}
-                    <div class="text-muted small mt-1">
-                      {{ instance.comment[:80] }}{% if instance.comment|length > 80 %}...{% endif %}
-                    </div>
-                    {% endif %}
-                  </div>
-                  <small class="text-muted text-end">
-                    {{ instance.created_at.strftime("%d/%m/%Y %H:%M") }}<br />
-                    {% if instance.user %}
-                    {{ instance.user.username }}
-                    {% endif %}
-                  </small>
+        <div>
+          <h6 class="mb-3 fw-semibold">{{ t('Check lists effectuées') }}</h6>
+          {% for instance in checklist_instances %}
+          <a href="{{ url_for('checklist_instance_detail', machine_id=machine.id, template_id=instance.template_id, instance_id=instance.id) }}" class="list-item-modern">
+            <div class="d-flex justify-content-between align-items-start">
+              <div class="flex-grow-1">
+                <strong>{{ instance.template.name }}</strong>
+                {% if instance.comment %}
+                <div class="text-muted small mt-1">
+                  {{ instance.comment[:80] }}{% if instance.comment|length > 80 %}...{% endif %}
                 </div>
-              </a>
-              {% endfor %}
+                {% endif %}
+              </div>
+              <small class="text-muted text-end">
+                {{ instance.created_at.strftime("%d/%m/%Y %H:%M") }}<br />
+                {% if instance.user %}
+                {{ instance.user.username }}
+                {% endif %}
+              </small>
             </div>
-          </div>
+          </a>
+          {% endfor %}
         </div>
         {% endif %}
       </div>
+    </div>
 
-      <!-- Onglet 2: Maintenance corrective -->
-      <div class="tab-pane fade {% if active_tab == 'corrective' %}show active{% endif %}" id="corrective" role="tabpanel" aria-labelledby="corrective-tab">
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">{{ t('Maintenances correctives') }}</h5>
-            <a class="btn btn-sm btn-warning" href="{{ url_for('new_corrective_maintenance', machine_id=machine.id) }}">
-              + Nouvelle
-            </a>
-          </div>
-          <div class="card-body">
-            {% if corrective_maintenances %}
-            <div class="list-group list-group-flush">
-              {% for maintenance in corrective_maintenances %}
-              <a class="list-group-item list-group-item-action" href="{{ url_for('corrective_maintenance_detail', maintenance_id=maintenance.id) }}">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div class="flex-grow-1">
-                    <strong>Maintenance corrective</strong>
-                    <div class="text-muted small mt-1">
-                      {% if maintenance.stock %}
-                      <span class="badge bg-info">Stock : {{ maintenance.stock.name }}</span>
-                      {% endif %}
-                    </div>
-                  </div>
-                  <small class="text-muted">
-                    {{ maintenance.created_at.strftime("%d/%m/%Y %H:%M") }}
-                    {% if maintenance.user %}
-                    · {{ maintenance.user.username }}
-                    {% endif %}
-                  </small>
-                </div>
-              </a>
-              {% endfor %}
-            </div>
-            {% else %}
-            <p class="text-muted mb-0 text-center py-3">{{ t('Aucune maintenance corrective enregistrée') }} pour cette machine.</p>
-            {% endif %}
-          </div>
+    <!-- Onglet 2: Maintenance corrective -->
+    <div class="tab-pane fade {% if active_tab == 'corrective' %}show active{% endif %}" id="corrective" role="tabpanel" aria-labelledby="corrective-tab">
+      <div class="section-card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="mb-0 fw-semibold">{{ t('Maintenances correctives') }}</h6>
+          {% if can_create_corrective_maintenance() and not is_readonly_machines_maintenances() %}
+          <a class="btn btn-warning btn-sm btn-modern" href="{{ url_for('new_corrective_maintenance', machine_id=machine.id) }}">
+            + {{ t('Nouvelle') }}
+          </a>
+          {% endif %}
         </div>
+        
+        {% if corrective_maintenances %}
+        {% for maintenance in corrective_maintenances %}
+        <a href="{{ url_for('corrective_maintenance_detail', maintenance_id=maintenance.id) }}" class="list-item-modern">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1">
+              <strong>{{ t('Maintenance corrective') }}</strong>
+              <div class="text-muted small mt-1">
+                {% if maintenance.stock %}
+                <span class="badge bg-info">{{ t('Stock') }} : {{ maintenance.stock.name }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <small class="text-muted">
+              {{ maintenance.created_at.strftime("%d/%m/%Y %H:%M") }}
+              {% if maintenance.user %}
+              · {{ maintenance.user.username }}
+              {% endif %}
+            </small>
+          </div>
+        </a>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state">
+          <div class="empty-state-icon">{{ icon_svg('alert-circle', 48) }}</div>
+          <p>{{ t('Aucune maintenance corrective enregistrée') }} pour cette machine.</p>
+        </div>
+        {% endif %}
       </div>
+    </div>
 
-      <!-- Onglet 3: Maintenance préventive -->
-      <div class="tab-pane fade {% if active_tab == 'preventive' %}show active{% endif %}" id="preventive" role="tabpanel" aria-labelledby="preventive-tab">
+    <!-- Onglet 3: Maintenance préventive -->
+    <div class="tab-pane fade {% if active_tab == 'preventive' %}show active{% endif %}" id="preventive" role="tabpanel" aria-labelledby="preventive-tab">
+      <div class="section-card-body">
         {% set has_own_counter = machine.hour_counter_enabled %}
         {% set has_root_counters = root_machine.is_root() and root_machine.counters %}
         {% if has_own_counter or has_root_counters %}
         <!-- Maintenances disponibles -->
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">{{ t('Maintenances disponibles') }}</h5>
+        <div class="mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0 fw-semibold">{{ t('Maintenances disponibles') }}</h6>
             {% if current_user.user_type == 'admin' %}
-            <a class="btn btn-sm btn-primary" href="{{ url_for('new_maintenance', machine_id=machine.id) }}">
-              + Nouveau modèle
+            <a class="btn btn-primary btn-sm btn-modern" href="{{ url_for('new_maintenance', machine_id=machine.id) }}">
+              + {{ t('Nouveau modèle') }}
             </a>
             {% endif %}
           </div>
-          <div class="card-body">
-            {% if templates %}
-            <div class="row g-3">
-              {% for item in template_progress %}
-              {% set report = item.report %}
-              {% set hours_remaining = item.hours_since %}
-              <div class="col-md-6">
-                <div class="card {% if hours_remaining <= 0 %}border-danger{% elif hours_remaining <= report.periodicity * 0.1 %}border-warning{% else %}border-secondary{% endif %}">
-                  <div class="card-body">
-                    <h6 class="card-title">{{ report.name }}</h6>
-                    <div class="mb-2">
-                      <span class="badge bg-secondary me-1">{{ report.periodicity }} h</span>
-                      <span class="badge bg-info me-1">{{ report.components|length }} éléments</span>
-                      {% if hours_remaining <= 0 %}
-                      <span class="badge bg-danger">En retard</span>
-                      {% elif hours_remaining <= report.periodicity * 0.1 %}
-                      <span class="badge bg-warning">Proche</span>
-                      {% endif %}
-                    </div>
-                    <p class="card-text small text-muted mb-2">
-                      <strong>Avant maintenance :</strong>
-                      {% set unit = machine.counter_unit or 'h' %}
-                      {% if hours_remaining < 0 %}
-                      <span class="text-danger">{{ "%.1f"|format(hours_remaining) }} {{ unit }} (retard)</span>
-                      {% elif hours_remaining == 0 %}
-                      <span class="text-danger">0 {{ unit }} (due)</span>
-                      {% else %}
-                      <span>{{ "%.1f"|format(hours_remaining) }} {{ unit }}</span>
-                      {% endif %}
-                    </p>
-                  <div class="btn-group w-100" role="group">
-                    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('maintenance_detail', report_id=report.id) }}">Voir</a>
-                    {% if current_user.user_type in ['admin', 'technicien'] %}
-                    <a class="btn btn-success btn-sm" href="{{ url_for('fill_maintenance', machine_id=machine.id, report_id=report.id) }}">Remplir</a>
-                    {% endif %}
-                  </div>
-                  </div>
+          
+          {% if templates %}
+          <div class="row g-3">
+            {% for item in template_progress %}
+            {% set report = item.report %}
+            {% set hours_remaining = item.hours_since %}
+            <div class="col-md-6">
+              <div class="template-card {% if hours_remaining <= 0 %}border-danger{% elif hours_remaining <= report.periodicity * 0.1 %}border-warning{% endif %}">
+                <div class="template-card-title">{{ report.name }}</div>
+                <div class="template-badges">
+                  <span class="badge bg-secondary">{{ report.periodicity }} h</span>
+                  <span class="badge bg-info">{{ report.components|length }} {{ t('éléments') }}</span>
+                  {% if hours_remaining <= 0 %}
+                  <span class="badge bg-danger">{{ t('En retard') }}</span>
+                  {% elif hours_remaining <= report.periodicity * 0.1 %}
+                  <span class="badge bg-warning">{{ t('Proche') }}</span>
+                  {% endif %}
+                </div>
+                <p class="small text-muted mb-2">
+                  <strong>{{ t('Avant maintenance') }} :</strong>
+                  {% set unit = machine.counter_unit or 'h' %}
+                  {% if hours_remaining < 0 %}
+                  <span class="text-danger">{{ "%.1f"|format(hours_remaining) }} {{ unit }} ({{ t('retard') }})</span>
+                  {% elif hours_remaining == 0 %}
+                  <span class="text-danger">0 {{ unit }} ({{ t('due') }})</span>
+                  {% else %}
+                  <span>{{ "%.1f"|format(hours_remaining) }} {{ unit }}</span>
+                  {% endif %}
+                </p>
+                <div class="btn-group w-100" role="group">
+                  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('maintenance_detail', report_id=report.id) }}">{{ t('Voir') }}</a>
+                  {% if can_edit_machines_maintenances() and not is_readonly_machines_maintenances() %}
+                  <a class="btn btn-success btn-sm" href="{{ url_for('fill_maintenance', machine_id=machine.id, report_id=report.id) }}">{{ t('Remplir') }}</a>
+                  {% endif %}
                 </div>
               </div>
-              {% endfor %}
             </div>
-            {% else %}
-            <div class="text-center py-4">
-              <p class="text-muted mb-3">{{ t('Aucune maintenance disponible') }}</p>
-              <a class="btn btn-primary" href="{{ url_for('new_maintenance', machine_id=machine.id) }}">Créer un modèle</a>
-            </div>
-            {% endif %}
+            {% endfor %}
           </div>
+          {% else %}
+          <div class="empty-state">
+            <div class="empty-state-icon">{{ icon_svg('alert-circle', 48) }}</div>
+            <p class="mb-3">{{ t('Aucune maintenance disponible') }}</p>
+            <a class="btn btn-primary btn-modern" href="{{ url_for('new_maintenance', machine_id=machine.id) }}">{{ t('Créer un modèle') }}</a>
+          </div>
+          {% endif %}
         </div>
         {% endif %}
 
         <!-- Maintenances préventives effectuées -->
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">{{ t('Maintenances préventives effectuées') }}</h5>
-          </div>
-          <div class="card-body">
-            {% if entries %}
-            <div class="list-group list-group-flush">
-              {% for entry in entries %}
-              <a class="list-group-item list-group-item-action" href="{{ url_for('maintenance_entry_detail', entry_id=entry.id) }}">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div class="flex-grow-1">
-                    <strong>{{ entry.report.name }}</strong>
-                    <div class="text-muted small mt-1">
-                      {% if entry.stock %}
-                      <span class="badge bg-info">Stock : {{ entry.stock.name }}</span>
-                      {% endif %}
-                    </div>
-                  </div>
-                  <small class="text-muted">
-                    {{ entry.created_at.strftime("%d/%m/%Y %H:%M") }}
-                    {% if entry.user %}
-                    · {{ entry.user.username }}
-                    {% endif %}
-                  </small>
+        <div>
+          <h6 class="mb-3 fw-semibold">{{ t('Maintenances préventives effectuées') }}</h6>
+          {% if entries %}
+          {% for entry in entries %}
+          <a href="{{ url_for('maintenance_entry_detail', entry_id=entry.id) }}" class="list-item-modern">
+            <div class="d-flex justify-content-between align-items-start">
+              <div class="flex-grow-1">
+                <strong>{{ entry.report.name }}</strong>
+                <div class="text-muted small mt-1">
+                  {% if entry.stock %}
+                  <span class="badge bg-info">{{ t('Stock') }} : {{ entry.stock.name }}</span>
+                  {% endif %}
                 </div>
-              </a>
-              {% endfor %}
+              </div>
+              <small class="text-muted">
+                {{ entry.created_at.strftime("%d/%m/%Y %H:%M") }}
+                {% if entry.user %}
+                · {{ entry.user.username }}
+                {% endif %}
+              </small>
             </div>
-            {% else %}
-            <p class="text-muted mb-0 text-center py-3">{{ t('Aucune maintenance préventive enregistrée') }} pour cette machine.</p>
-            {% endif %}
+          </a>
+          {% endfor %}
+          {% else %}
+          <div class="empty-state">
+            <div class="empty-state-icon">{{ icon_svg('alert-circle', 48) }}</div>
+            <p>{{ t('Aucune maintenance préventive enregistrée') }} pour cette machine.</p>
           </div>
+          {% endif %}
         </div>
       </div>
+    </div>
 
-      <!-- Onglet 4: Documentation -->
-      <div class="tab-pane fade {% if active_tab == 'documentation' %}show active{% endif %}" id="documentation" role="tabpanel" aria-labelledby="documentation-tab">
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Documentation</h5>
-            {% if current_user.user_type == 'admin' %}
-            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
-              + {{ t('Ajouter un document') }}
-            </button>
-            {% endif %}
-          </div>
-          <div class="card-body">
-            {% if documents %}
-            <div class="list-group list-group-flush">
-              {% for document in documents %}
-              <div class="list-group-item d-flex justify-content-between align-items-center">
-                <a href="{{ url_for('download_machine_document', machine_id=machine.id, document_id=document.id) }}" target="_blank" class="text-decoration-none flex-grow-1">
-                  <div>
-                    <strong>📄 {{ document.original_filename }}</strong>
-                    <div class="text-muted small mt-1">
-                      Ajouté le {{ document.uploaded_at.strftime("%d/%m/%Y %H:%M") }}
-                      {% if document.user %}
-                      par {{ document.user.username }}
-                      {% endif %}
-                    </div>
-                  </div>
-                </a>
-                {% if current_user.user_type == 'admin' %}
-                <form method="post" action="{{ url_for('delete_machine_document', machine_id=machine.id, document_id=document.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce document ?');">
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer">🗑️</button>
-                </form>
-                {% endif %}
+    <!-- Onglet 4: Documentation -->
+    <div class="tab-pane fade {% if active_tab == 'documentation' %}show active{% endif %}" id="documentation" role="tabpanel" aria-labelledby="documentation-tab">
+      <div class="section-card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="mb-0 fw-semibold">{{ t('Documentation') }}</h6>
+          {% if can_add_documentation() and not is_readonly_machines_maintenances() %}
+          <button type="button" class="btn btn-primary btn-sm btn-modern" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
+            + {{ t('Ajouter un document') }}
+          </button>
+          {% endif %}
+        </div>
+        
+        {% if documents %}
+        {% for document in documents %}
+        <div class="list-item-modern">
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('download_machine_document', machine_id=machine.id, document_id=document.id) }}" target="_blank" class="text-decoration-none flex-grow-1">
+              <div>
+                <strong>{{ icon_svg('edit', 18) }} {{ document.original_filename }}</strong>
+                <div class="text-muted small mt-1">
+                  {{ t('Ajouté le') }} {{ document.uploaded_at.strftime("%d/%m/%Y %H:%M") }}
+                  {% if document.user %}
+                  {{ t('par') }} {{ document.user.username }}
+                  {% endif %}
+                </div>
               </div>
-              {% endfor %}
-            </div>
-            {% else %}
-            <p class="text-muted mb-0 text-center py-3">{{ t('Aucun document disponible') }} pour cette machine.</p>
+            </a>
+            {% if can_delete_machines() and not is_readonly_machines_maintenances() %}
+            <form method="post" action="{{ url_for('delete_machine_document', machine_id=machine.id, document_id=document.id) }}" class="d-inline ms-2" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce document ?') }}');">
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer') }}">{{ icon_svg('delete', 16) }}</button>
+            </form>
             {% endif %}
           </div>
         </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state">
+          <div class="empty-state-icon">{{ icon_svg('alert-circle', 48) }}</div>
+          <p>{{ t('Aucun document disponible') }} pour cette machine.</p>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
 </div>
 
 <!-- Modal pour uploader un document -->
-{% if current_user.user_type == 'admin' %}
+{% if can_add_documentation() and not is_readonly_machines_maintenances() %}
 <div class="modal fade" id="uploadDocumentModal" tabindex="-1" aria-labelledby="uploadDocumentModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -412,135 +747,21 @@
       <form method="post" action="{{ url_for('upload_machine_document', machine_id=machine.id) }}" enctype="multipart/form-data">
         <div class="modal-body">
           <div class="mb-3">
-            <label for="documentFile" class="form-label">Fichier PDF</label>
+            <label for="documentFile" class="form-label">{{ t('Fichier PDF') }}</label>
             <input type="file" class="form-control" id="documentFile" name="file" accept=".pdf" required />
-            <div class="form-text">Seuls les fichiers PDF sont acceptés.</div>
+            <div class="form-text">{{ t('Seuls les fichiers PDF sont acceptés.') }}</div>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-          <button type="submit" class="btn btn-primary">Uploader</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('Annuler') }}</button>
+          <button type="submit" class="btn btn-primary">{{ t('Uploader') }}</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 {% endif %}
-<style>
-  /* Réduction de la hauteur des cartes checklist et maintenance */
-  #checklists .card-body,
-  #preventive .card-body {
-    padding: 0.75rem;
-  }
-  
-  #checklists .card-title,
-  #preventive .card-title {
-    margin-bottom: 0.5rem;
-    font-size: 0.95rem;
-  }
-  
-  #checklists .card-text,
-  #preventive .card-text {
-    margin-bottom: 0.5rem;
-  }
-  
-  #checklists .mb-2,
-  #preventive .mb-2 {
-    margin-bottom: 0.5rem !important;
-  }
-  
-  #checklists .btn-group,
-  #preventive .btn-group {
-    margin-top: 0.5rem;
-  }
-  
-  /* Responsive pour machine_detail */
-  @media (max-width: 768px) {
-    .d-flex.justify-content-between {
-      flex-direction: column;
-      gap: 1rem;
-      align-items: flex-start !important;
-    }
-    
-    .btn-group {
-      flex-direction: column;
-      width: 100%;
-    }
-    
-    .btn-group > * {
-      width: 100%;
-      margin-bottom: 0.5rem;
-    }
-    
-    .card-body {
-      padding: 1rem;
-    }
-    
-    .list-group-item {
-      flex-direction: column;
-      align-items: flex-start !important;
-      gap: 0.5rem;
-    }
-    
-    .list-group-item .d-flex {
-      width: 100%;
-      justify-content: space-between;
-    }
-    
-    .row.g-3 > [class*="col-md-"] {
-      flex: 0 0 100%;
-      max-width: 100%;
-      margin-bottom: 1rem;
-    }
-    
-    .nav-tabs {
-      flex-wrap: wrap;
-    }
-    
-    .nav-tabs .nav-link {
-      font-size: 0.875rem;
-      padding: 0.5rem 0.75rem;
-    }
-    
-    .table-responsive {
-      font-size: 0.875rem;
-    }
-    
-    .table th, .table td {
-      padding: 0.5rem 0.25rem;
-    }
-    
-    .modal-dialog {
-      margin: 0.5rem;
-    }
-    
-    .breadcrumb {
-      font-size: 0.875rem;
-      overflow-x: auto;
-      white-space: nowrap;
-    }
-  }
-  
-  @media (max-width: 576px) {
-    h2 {
-      font-size: 1.5rem;
-    }
-    
-    .card-body {
-      padding: 0.75rem;
-    }
-    
-    .table th, .table td {
-      padding: 0.375rem 0.125rem;
-      font-size: 0.8rem;
-    }
-    
-    .badge {
-      font-size: 0.7rem;
-      padding: 0.25rem 0.5rem;
-    }
-  }
-</style>
+
 <script>
   // Mettre à jour l'URL avec le paramètre tab quand on clique sur un onglet
   document.addEventListener('DOMContentLoaded', function() {
@@ -550,7 +771,6 @@
         const tab = event.target.getAttribute('data-tab');
         const url = new URL(window.location);
         url.searchParams.set('tab', tab);
-        // Mettre à jour l'URL sans recharger la page
         window.history.pushState({}, '', url);
       });
     });

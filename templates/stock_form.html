@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Nouveau stock{% endblock %}
+{% block title %}{{ t('Nouveau stock') }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -84,27 +84,27 @@
 </style>
 
 <div class="page-header">
-  <h1 class="page-title">Créer un stock</h1>
+  <h1 class="page-title">{{ t('Créer un stock') }}</h1>
 </div>
 
 {% if not can_create %}
 <div class="alert alert-warning">
-  <strong>Limite atteinte :</strong> Le nombre maximum de stocks est limité à 10. Vous avez actuellement {{ existing_stocks_count }} stock(s).
+  <strong>{{ t('Limite atteinte :') }}</strong> {{ t('Le nombre maximum de stocks est limité à 10. Vous avez actuellement') }} {{ existing_stocks_count }} {{ t('stock(s).') }}
 </div>
 {% else %}
 <div class="form-card">
-  <p class="text-muted mb-3">Nombre de stocks actuels : {{ existing_stocks_count }}/10</p>
+  <p class="text-muted mb-3">{{ t('Nombre de stocks actuels :') }} {{ existing_stocks_count }}/10</p>
   <form method="post">
   <div class="mb-3">
-    <label class="form-label">Nom</label>
+    <label class="form-label">{{ t('Nom') }}</label>
     <input class="form-control" name="name" required />
   </div>
   <div class="mb-3">
-    <label class="form-label">Code</label>
+    <label class="form-label">{{ t('Code') }}</label>
     <input class="form-control" name="code" required />
   </div>
     <div class="mt-4">
-      <button class="btn btn-success">Créer</button>
+      <button class="btn btn-success">{{ t('Créer') }}</button>
     </div>
   </form>
 </div>

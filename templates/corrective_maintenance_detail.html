@@ -118,7 +118,7 @@
       </p>
     </div>
     {% if current_user.user_type == 'admin' or (current_user.user_type == 'technicien' and maintenance.user_id == current_user.id) %}
-    <a class="btn btn-outline-primary" href="{{ url_for('edit_corrective_maintenance', maintenance_id=maintenance.id) }}" title="Modifier le rapport">✏️</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('edit_corrective_maintenance', maintenance_id=maintenance.id) }}" title="Modifier le rapport"><img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="Modifier" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></a>
     {% endif %}
   </div>
 </div>

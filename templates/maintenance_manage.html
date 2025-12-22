@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Gestion maintenances{% endblock %}
+{% block title %}{{ t('Gestion des maintenances') }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -47,6 +47,9 @@
     color: #1a3b50;
     font-weight: 600;
     border-bottom: 2px solid #1a3b50;
+  }
+  .table tbody tr:hover {
+    background-color: #f8f9fa;
   }
   .badge {
     padding: 0.4rem 0.8rem;
@@ -137,7 +140,7 @@
 <!-- Périodicité dépassée -->
 <div class="card mb-4">
   <div class="card-header bg-danger text-white d-flex align-items-center">
-    <span class="me-2">🔴</span>
+    <img src="{{ url_for('static', filename='icons/circle-red.svg') }}" alt="" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;" class="me-2">
     <h5 class="mb-0">{{ t('Périodicité dépassée') }}</h5>
     {% if overdue %}
     <span class="badge bg-light text-danger ms-auto">{{ overdue|length }}</span>
@@ -160,16 +163,18 @@
       <tbody>
         {% for item in overdue %}
         {% set unit = item.machine.counter_unit or 'h' %}
-          <tr>
+          <tr style="cursor: pointer;" onclick="window.location.href='{{ url_for('fill_maintenance', machine_id=item.machine.id, report_id=item.report.id) }}'">
             <td class="ps-3">
-              <a href="{{ url_for('machine_detail', machine_id=item.machine.id) }}" class="text-decoration-none fw-semibold">
+              <a href="{{ url_for('machine_detail', machine_id=item.machine.id) }}" class="text-decoration-none fw-semibold" onclick="event.stopPropagation();">
                 {{ item.machine.name }}
               </a>
               <br>
               <small class="text-muted">{{ item.machine.code }}</small>
             </td>
             <td>
-              <span class="fw-semibold">{{ item.report.name }}</span>
+              <a href="{{ url_for('fill_maintenance', machine_id=item.machine.id, report_id=item.report.id) }}" class="text-decoration-none fw-semibold text-dark" onclick="event.stopPropagation();">
+                {{ item.report.name }}
+              </a>
             </td>
           <td>
             {% if item.last_performed %}
@@ -177,7 +182,7 @@
               <br>
               <small class="text-muted">{{ item.last_performed.strftime("%H:%M") }}</small>
             {% else %}
-              <span class="text-muted fst-italic">Jamais effectué</span>
+              <span class="text-muted fst-italic">{{ t('Jamais effectué') }}</span>
             {% endif %}
           </td>
             <td>
@@ -197,7 +202,9 @@
   </div>
   {% else %}
     <div class="p-4 text-center">
-      <p class="text-muted mb-0">✅ Aucun rapport en retard.</p>
+      <p class="text-muted mb-0">
+        <img src="{{ url_for('static', filename='icons/check-circle.svg') }}" alt="" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; filter: brightness(0) saturate(100%) invert(67%) sepia(61%) saturate(400%) hue-rotate(90deg) brightness(95%) contrast(90%);"> {{ t('Aucun rapport en retard.') }}
+      </p>
     </div>
   {% endif %}
   </div>
@@ -206,8 +213,8 @@
 <!-- Proches de l'échéance -->
 <div class="card">
   <div class="card-header bg-warning text-dark d-flex align-items-center">
-    <span class="me-2">⚠️</span>
-    <h5 class="mb-0">{{ t('Périodicité proche') }} (≤ {{ threshold }}% restant)</h5>
+    <img src="{{ url_for('static', filename='icons/alert-triangle.svg') }}" alt="" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; filter: brightness(0) saturate(100%) invert(67%) sepia(100%) saturate(2000%) hue-rotate(0deg) brightness(1) contrast(1);" class="me-2">
+    <h5 class="mb-0">{{ t('Périodicité proche') }} (≤ {{ threshold }}% {{ t('restant') }})</h5>
     {% if warning %}
     <span class="badge bg-dark ms-auto">{{ warning|length }}</span>
     {% endif %}
@@ -218,27 +225,29 @@
       <table class="table table-hover mb-0">
         <thead class="table-light">
         <tr>
-            <th class="ps-3">Machine</th>
-          <th>Rapport</th>
-          <th>Dernier relevé</th>
-          <th>Écoulé</th>
-          <th>Périodicité</th>
-            <th class="text-end pe-3">Reste</th>
+            <th class="ps-3">{{ t('Machine') }}</th>
+          <th>{{ t('Rapport') }}</th>
+          <th>{{ t('Dernier relevé') }}</th>
+          <th>{{ t('Écoulé') }}</th>
+          <th>{{ t('Périodicité') }}</th>
+            <th class="text-end pe-3">{{ t('Reste') }}</th>
         </tr>
       </thead>
       <tbody>
         {% for item in warning %}
         {% set unit = item.machine.counter_unit or 'h' %}
-          <tr>
+          <tr style="cursor: pointer;" onclick="window.location.href='{{ url_for('fill_maintenance', machine_id=item.machine.id, report_id=item.report.id) }}'">
             <td class="ps-3">
-              <a href="{{ url_for('machine_detail', machine_id=item.machine.id) }}" class="text-decoration-none fw-semibold">
+              <a href="{{ url_for('machine_detail', machine_id=item.machine.id) }}" class="text-decoration-none fw-semibold" onclick="event.stopPropagation();">
                 {{ item.machine.name }}
               </a>
               <br>
               <small class="text-muted">{{ item.machine.code }}</small>
             </td>
             <td>
-              <span class="fw-semibold">{{ item.report.name }}</span>
+              <a href="{{ url_for('fill_maintenance', machine_id=item.machine.id, report_id=item.report.id) }}" class="text-decoration-none fw-semibold text-dark" onclick="event.stopPropagation();">
+                {{ item.report.name }}
+              </a>
             </td>
           <td>
             {% if item.last_performed %}
@@ -246,7 +255,7 @@
               <br>
               <small class="text-muted">{{ item.last_performed.strftime("%H:%M") }}</small>
             {% else %}
-              <span class="text-muted fst-italic">Jamais effectué</span>
+              <span class="text-muted fst-italic">{{ t('Jamais effectué') }}</span>
             {% endif %}
           </td>
             <td>
@@ -266,7 +275,9 @@
   </div>
   {% else %}
     <div class="p-4 text-center">
-      <p class="text-muted mb-0">✅ Aucun rapport proche de l'échéance.</p>
+      <p class="text-muted mb-0">
+        <img src="{{ url_for('static', filename='icons/check-circle.svg') }}" alt="" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; filter: brightness(0) saturate(100%) invert(67%) sepia(61%) saturate(400%) hue-rotate(90deg) brightness(95%) contrast(90%);"> {{ t('Aucun rapport proche de l\'échéance.') }}
+      </p>
     </div>
   {% endif %}
   </div>

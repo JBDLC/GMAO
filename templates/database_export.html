@@ -129,7 +129,7 @@
             <td>Export de toutes les maintenances préventives et correctives</td>
             <td>
               <a href="{{ url_for('export_maintenances_excel') }}" class="btn btn-sm btn-primary">
-                📥 Télécharger Excel
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Télécharger Excel
               </a>
             </td>
           </tr>
@@ -138,7 +138,7 @@
             <td>Export de tous les modèles de maintenance préventive</td>
             <td>
               <a href="{{ url_for('export_modeles_excel') }}" class="btn btn-sm btn-primary">
-                📥 Télécharger Excel
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Télécharger Excel
               </a>
             </td>
           </tr>
@@ -147,7 +147,7 @@
             <td>Export de l'arborescence complète des machines</td>
             <td>
               <a href="{{ url_for('export_machines_excel') }}" class="btn btn-sm btn-primary">
-                📥 Télécharger Excel
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Télécharger Excel
               </a>
             </td>
           </tr>
@@ -156,7 +156,7 @@
             <td>Export de tous les relevés de compteur</td>
             <td>
               <a href="{{ url_for('export_releves_excel') }}" class="btn btn-sm btn-primary">
-                📥 Télécharger Excel
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Télécharger Excel
               </a>
             </td>
           </tr>
@@ -165,7 +165,7 @@
             <td>Export de tous les produits</td>
             <td>
               <a href="{{ url_for('export_produits_excel') }}" class="btn btn-sm btn-primary">
-                📥 Télécharger Excel
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Télécharger Excel
               </a>
             </td>
           </tr>
@@ -174,7 +174,7 @@
             <td>Export de tous les mouvements de stock</td>
             <td>
               <a href="{{ url_for('export_mouvements_excel') }}" class="btn btn-sm btn-primary">
-                📥 Télécharger Excel
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Télécharger Excel
               </a>
             </td>
           </tr>
@@ -183,13 +183,93 @@
             <td>Export de tous les inventaires effectués</td>
             <td>
               <a href="{{ url_for('export_inventaires_excel') }}" class="btn btn-sm btn-primary">
-                📥 Télécharger Excel
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Télécharger Excel
               </a>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+</div>
+
+<!-- Section de gestion des fichiers Excel uploadés -->
+<div class="info-card mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h5 mb-0" style="color: #1a3b50;">{{ t('Fichiers Excel uploadés') }}</h2>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadExcelModal">
+      <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Upload" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> {{ t('Uploader un fichier Excel') }}
+    </button>
+  </div>
+  
+  {% if excel_files %}
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th>{{ t('Nom') }}</th>
+          <th>{{ t('Fichier original') }}</th>
+          <th>{{ t('Uploadé par') }}</th>
+          <th>{{ t('Date') }}</th>
+          <th>{{ t('Actions') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for excel_file in excel_files %}
+        <tr>
+          <td><strong>{{ excel_file.name }}</strong></td>
+          <td>{{ excel_file.original_filename }}</td>
+          <td>{{ excel_file.user.username }}</td>
+          <td>{{ excel_file.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+          <td>
+            <div class="btn-group">
+              <a href="{{ url_for('download_excel_file', file_id=excel_file.id) }}" class="btn btn-sm btn-primary" title="{{ t('Télécharger') }}">
+                <img src="{{ url_for('static', filename='icons/import.svg') }}" alt="Télécharger" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;">
+              </a>
+              <form method="post" action="{{ url_for('delete_excel_file', file_id=excel_file.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce fichier ?') }}');">
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer') }}">
+                  <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;">
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted mb-0">{{ t('Aucun fichier Excel uploadé pour le moment.') }}</p>
+  {% endif %}
+</div>
+
+<!-- Modal pour uploader un fichier Excel -->
+<div class="modal fade" id="uploadExcelModal" tabindex="-1" aria-labelledby="uploadExcelModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="uploadExcelModalLabel">{{ t('Uploader un fichier Excel') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{{ url_for('upload_excel_file') }}" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="excel-name" class="form-label">{{ t('Nom du fichier') }}</label>
+            <input type="text" class="form-control" id="excel-name" name="name" required placeholder="{{ t('Ex: Rapport mensuel janvier 2024') }}">
+            <small class="form-text text-muted">{{ t('Donnez un nom descriptif à ce fichier') }}</small>
+          </div>
+          <div class="mb-3">
+            <label for="excel-file" class="form-label">{{ t('Fichier Excel') }}</label>
+            <input type="file" class="form-control" id="excel-file" name="file" accept=".xlsx,.xls" required>
+            <small class="form-text text-muted">{{ t('Formats acceptés : .xlsx, .xls') }}</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('Annuler') }}</button>
+          <button type="submit" class="btn btn-primary">{{ t('Uploader') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 

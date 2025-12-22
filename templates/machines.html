@@ -16,19 +16,35 @@
       {% set status = machine_status.get(node.id) %}
       <span class="machine-status {% if status == 'danger' %}danger{% elif status == 'warning' %}warning{% endif %}"></span>
       
-      <div class="machine-info">
+        <div class="machine-info">
         <a href="{{ url_for('machine_detail', machine_id=node.id) }}" class="machine-name">
           {{ node.name }} <span class="machine-code">({{ node.code }})</span>
         </a>
-        <div class="machine-badges">
-          {% if node.is_root() and node.counters %}
-            {% for counter in node.counters %}
-            <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
-            {% endfor %}
-          {% elif node.hour_counter_enabled %}
-          <span class="badge-counter">{{ "%.1f"|format(node.hours) }} {{ node.counter_unit or 'h' }}</span>
-          {% endif %}
+        {% if (node.is_root() and node.counters) or node.hour_counter_enabled %}
+        <div class="machine-counters-info" style="position: relative; display: inline-block; margin-left: 8px;">
+          {% set counters_count = node.counters|length if node.is_root() and node.counters else 1 %}
+          <button type="button" class="btn-counter-badge" data-machine-id="{{ node.id }}" title="Voir les compteurs">
+            {{ counters_count }} {% if counters_count > 1 %}compteurs{% else %}compteur{% endif %}
+          </button>
+          <div class="counter-tooltip" id="counter-tooltip-{{ node.id }}" style="display: none;">
+            <div class="counter-tooltip-content">
+              {% if node.is_root() and node.counters %}
+                {% for counter in node.counters %}
+                <div class="counter-tooltip-item">
+                  <span class="counter-name">{{ counter.name }}:</span>
+                  <span class="counter-value">{{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+                </div>
+                {% endfor %}
+              {% elif node.hour_counter_enabled %}
+              <div class="counter-tooltip-item">
+                <span class="counter-name">{{ t('Compteur machine') }}:</span>
+                <span class="counter-value">{{ "%.1f"|format(node.hours) }} {{ node.counter_unit or 'h' }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
         </div>
+        {% endif %}
       </div>
       
       <div class="machine-actions">
@@ -37,18 +53,30 @@
           class="btn-action follow-btn {% if node.id in followed_machine_ids %}followed{% endif %}" 
           data-machine-id="{{ node.id }}"
           title="{% if node.id in followed_machine_ids %}{{ t('Ne plus suivre') }}{% else %}{{ t('Suivre cette machine') }}{% endif %}">
-          {% if node.id in followed_machine_ids %}★{% else %}☆{% endif %}
+          {% if node.id in followed_machine_ids %}
+            <img src="{{ url_for('static', filename='icons/star.svg') }}" alt="Suivi" style="width: 16px; height: 16px; display: inline-block;">
+          {% else %}
+            <img src="{{ url_for('static', filename='icons/star-outline.svg') }}" alt="Non suivi" style="width: 16px; height: 16px; display: inline-block;">
+          {% endif %}
         </button>
         {% if current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(node) %}
-        <a href="{{ url_for('counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Relevé de compteur') }}">📊</a>
+        <a href="{{ url_for('counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Relevé de compteur') }}">
+          <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé" style="width: 16px; height: 16px;">
+        </a>
         {% endif %}
         {% if current_user.user_type == 'admin' and has_counter_in_tree(node) %}
-        <a href="{{ url_for('edit_counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Modifier le relevé compteur') }}">✏️</a>
+        <a href="{{ url_for('edit_counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Modifier le relevé compteur') }}">
+          <img src="{{ url_for('static', filename='icons/arrow-left.svg') }}" alt="Modifier relevé" style="width: 16px; height: 16px;">
+        </a>
         {% endif %}
         {% if current_user.user_type == 'admin' %}
-        <a href="{{ url_for('edit_machine', machine_id=node.id) }}" class="btn-action" title="{{ t('Modifier') }}">✏️</a>
+        <a href="{{ url_for('edit_machine', machine_id=node.id) }}" class="btn-action" title="{{ t('Modifier') }}">
+          <img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="Modifier" style="width: 16px; height: 16px;">
+        </a>
         <form method="post" action="{{ url_for('delete_machine', machine_id=node.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.') }}');">
-          <button type="submit" class="btn-action" title="{{ t('Supprimer') }}">🗑️</button>
+          <button type="submit" class="btn-action" title="{{ t('Supprimer') }}">
+            <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px;">
+          </button>
         </form>
         {% endif %}
       </div>
@@ -66,6 +94,27 @@
 
 {% block content %}
 <style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
   .machine-tree {
     background: white;
     border-radius: 8px;
@@ -185,6 +234,84 @@
     font-weight: 500;
   }
   
+  .btn-counter-badge {
+    background-color: rgba(26, 59, 80, 0.1);
+    color: #1a3b50;
+    border: 1px solid rgba(26, 59, 80, 0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-counter-badge:hover {
+    background-color: rgba(26, 59, 80, 0.2);
+    border-color: rgba(26, 59, 80, 0.5);
+  }
+  
+  .counter-tooltip {
+    position: fixed;
+    z-index: 99999;
+    min-width: 200px;
+    pointer-events: none;
+  }
+  
+  .counter-tooltip-content {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 10px;
+    pointer-events: auto;
+  }
+  
+  .counter-tooltip-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  
+  .counter-tooltip-item:last-child {
+    border-bottom: none;
+  }
+  
+  .counter-tooltip-item .counter-name {
+    font-weight: 500;
+    color: #1a3b50;
+  }
+  
+  .counter-tooltip-item .counter-value {
+    color: #6c757d;
+    font-weight: 600;
+  }
+  
+  /* Flèche du tooltip */
+  .counter-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: white;
+    pointer-events: none;
+  }
+  
+  .counter-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+    border-top-color: #dee2e6;
+    margin-top: -1px;
+    pointer-events: none;
+  }
+  
   .machine-actions {
     display: flex;
     gap: 6px;
@@ -214,6 +341,10 @@
     border-color: #1a3b50;
   }
   
+  .btn-action:hover img {
+    filter: brightness(0) invert(1);
+  }
+  
   .btn-action.follow-btn {
     border-color: #ffc107;
     color: #ffc107;
@@ -225,10 +356,18 @@
     border-color: #ffc107;
   }
   
+  .btn-action.follow-btn.followed img {
+    filter: brightness(0);
+  }
+  
   .btn-action.follow-btn:hover {
     background: #ffc107;
     color: #000;
     border-color: #ffc107;
+  }
+  
+  .btn-action.follow-btn:hover img {
+    filter: brightness(0);
   }
   
   .machine-children {
@@ -874,6 +1013,17 @@
     color: white;
   }
   
+  [class*="machine-color-"] .btn-counter-badge {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  [class*="machine-color-"] .btn-counter-badge:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+  
   [class*="machine-color-"].tree-level-0 .btn-action,
   [class*="machine-color-"].tree-level-1 .btn-action,
   [class*="machine-color-"].tree-level-2 .btn-action,
@@ -894,6 +1044,11 @@
     border-color: rgba(255, 255, 255, 0.5);
   }
   
+  [class*="machine-color-"] .btn-action img,
+  [class*="machine-color-"] .btn-action:hover img {
+    filter: brightness(0) invert(1);
+  }
+  
   [class*="machine-color-"].tree-level-0 .machine-status,
   [class*="machine-color-"].tree-level-1 .machine-status,
   [class*="machine-color-"].tree-level-2 .machine-status,
@@ -903,12 +1058,14 @@
   }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2 style="color: #1a3b50; font-weight: 600;">{{ t('Arborescence des machines') }}</h2>
-  <div class="btn-group">
-    {% if current_user.user_type == 'admin' %}
-    <a class="btn btn-primary" href="{{ url_for('new_machine') }}" style="background-color: #1a3b50; border-color: #1a3b50;">+ Machine</a>
-    {% endif %}
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">{{ t('Arborescence des machines') }}</h1>
+    <div class="btn-group">
+      {% if current_user.user_type == 'admin' %}
+      <a class="btn btn-primary" href="{{ url_for('new_machine') }}" style="background-color: #1a3b50; border-color: #1a3b50;">+ Machine</a>
+      {% endif %}
+    </div>
   </div>
 </div>
 
@@ -934,15 +1091,31 @@
           <a href="{{ url_for('machine_detail', machine_id=root.id) }}" class="machine-name">
             {{ root.name }} <span class="machine-code">({{ root.code }})</span>
           </a>
-          <div class="machine-badges">
-            {% if root.is_root() and root.counters %}
-              {% for counter in root.counters %}
-              <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
-              {% endfor %}
-            {% elif root.hour_counter_enabled %}
-            <span class="badge-counter">{{ "%.1f"|format(root.hours) }} {{ root.counter_unit or 'h' }}</span>
-            {% endif %}
+          {% if (root.is_root() and root.counters) or root.hour_counter_enabled %}
+          <div class="machine-counters-info" style="position: relative; display: inline-block; margin-left: 8px;">
+            {% set counters_count = root.counters|length if root.is_root() and root.counters else 1 %}
+            <button type="button" class="btn-counter-badge" data-machine-id="{{ root.id }}" title="Voir les compteurs">
+              {{ counters_count }} {% if counters_count > 1 %}compteurs{% else %}compteur{% endif %}
+            </button>
+            <div class="counter-tooltip" id="counter-tooltip-{{ root.id }}" style="display: none;">
+              <div class="counter-tooltip-content">
+                {% if root.is_root() and root.counters %}
+                  {% for counter in root.counters %}
+                  <div class="counter-tooltip-item">
+                    <span class="counter-name">{{ counter.name }}:</span>
+                    <span class="counter-value">{{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+                  </div>
+                  {% endfor %}
+                {% elif root.hour_counter_enabled %}
+                <div class="counter-tooltip-item">
+                  <span class="counter-name">{{ t('Compteur machine') }}:</span>
+                  <span class="counter-value">{{ "%.1f"|format(root.hours) }} {{ root.counter_unit or 'h' }}</span>
+                </div>
+                {% endif %}
+              </div>
+            </div>
           </div>
+          {% endif %}
         </div>
         
         <div class="machine-actions">
@@ -951,18 +1124,30 @@
             class="btn-action follow-btn {% if root.id in followed_machine_ids %}followed{% endif %}" 
             data-machine-id="{{ root.id }}"
             title="{% if root.id in followed_machine_ids %}Ne plus suivre{% else %}Suivre cette machine{% endif %}">
-            {% if root.id in followed_machine_ids %}★{% else %}☆{% endif %}
+            {% if root.id in followed_machine_ids %}
+              <img src="{{ url_for('static', filename='icons/star.svg') }}" alt="Suivi" style="width: 16px; height: 16px; display: inline-block;">
+            {% else %}
+              <img src="{{ url_for('static', filename='icons/star-outline.svg') }}" alt="Non suivi" style="width: 16px; height: 16px; display: inline-block;">
+            {% endif %}
           </button>
           {% if current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(root) %}
-          <a href="{{ url_for('counter_report', machine_id=root.id) }}" class="btn-action" title="Relevé compteur">📊</a>
+          <a href="{{ url_for('counter_report', machine_id=root.id) }}" class="btn-action" title="Relevé compteur">
+            <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé" style="width: 16px; height: 16px;">
+          </a>
           {% endif %}
           {% if current_user.user_type == 'admin' and has_counter_in_tree(root) %}
-          <a href="{{ url_for('edit_counter_report', machine_id=root.id) }}" class="btn-action" title="{{ t('Modifier le relevé compteur') }}">✏️</a>
+          <a href="{{ url_for('edit_counter_report', machine_id=root.id) }}" class="btn-action" title="{{ t('Modifier le relevé compteur') }}">
+            <img src="{{ url_for('static', filename='icons/arrow-left.svg') }}" alt="Modifier relevé" style="width: 16px; height: 16px;">
+          </a>
           {% endif %}
           {% if current_user.user_type == 'admin' %}
-          <a href="{{ url_for('edit_machine', machine_id=root.id) }}" class="btn-action" title="Modifier">✏️</a>
+          <a href="{{ url_for('edit_machine', machine_id=root.id) }}" class="btn-action" title="Modifier">
+            <img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="Modifier" style="width: 16px; height: 16px;">
+          </a>
           <form method="post" action="{{ url_for('delete_machine', machine_id=root.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.');">
-            <button type="submit" class="btn-action" title="Supprimer">🗑️</button>
+            <button type="submit" class="btn-action" title="Supprimer">
+              <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px;">
+            </button>
           </form>
           {% endif %}
         </div>
@@ -1061,11 +1246,11 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(data => {
         if (data.success) {
           if (data.is_followed) {
-            this.innerHTML = '★';
+            this.innerHTML = '<img src="/static/icons/star.svg" alt="Suivi" style="width: 16px; height: 16px; display: inline-block;">';
             this.classList.add('followed');
             this.title = '{{ t('Ne plus suivre') }}';
           } else {
-            this.innerHTML = '☆';
+            this.innerHTML = '<img src="/static/icons/star-outline.svg" alt="Non suivi" style="width: 16px; height: 16px; display: inline-block;">';
             this.classList.remove('followed');
             this.title = '{{ t('Suivre cette machine') }}';
           }
@@ -1081,6 +1266,68 @@ document.addEventListener('DOMContentLoaded', function() {
         this.disabled = false;
       });
     });
+  });
+  
+  // Gestion des tooltips de compteurs
+  const counterBadges = document.querySelectorAll('.btn-counter-badge');
+  
+  counterBadges.forEach(function(badge) {
+    const machineId = badge.getAttribute('data-machine-id');
+    const tooltip = document.getElementById('counter-tooltip-' + machineId);
+    
+    if (!tooltip) return;
+    
+    // Détecter si on est sur mobile
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    
+    if (isMobile) {
+      // Sur mobile : afficher au clic
+      let isOpen = false;
+      badge.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (isOpen) {
+          tooltip.style.display = 'none';
+          isOpen = false;
+        } else {
+          // Fermer tous les autres tooltips
+          document.querySelectorAll('.counter-tooltip').forEach(function(t) {
+            t.style.display = 'none';
+          });
+          tooltip.style.display = 'block';
+          isOpen = true;
+        }
+      });
+      
+      // Fermer au clic ailleurs
+      document.addEventListener('click', function(e) {
+        if (!badge.contains(e.target) && !tooltip.contains(e.target)) {
+          tooltip.style.display = 'none';
+          isOpen = false;
+        }
+      });
+    } else {
+      // Sur desktop : afficher au survol
+      badge.addEventListener('mouseenter', function() {
+        const rect = badge.getBoundingClientRect();
+        tooltip.style.display = 'block';
+        tooltip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+        tooltip.style.transform = 'translateX(-50%)';
+      });
+      
+      badge.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+      });
+      
+      // Garder le tooltip ouvert si on survole le tooltip lui-même
+      tooltip.addEventListener('mouseenter', function() {
+        tooltip.style.display = 'block';
+      });
+      
+      tooltip.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+      });
+    }
   });
   
 });

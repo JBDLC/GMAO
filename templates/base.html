@@ -1,5 +1,8 @@
 <!doctype html>
 <html lang="{{ current_lang }}">
+  {% macro icon_svg(icon_name, size=16, class="") %}
+    <img src="{{ url_for('static', filename='icons/' + icon_name + '.svg') }}" alt="" style="width: {{ size }}px; height: {{ size }}px; display: inline-block; vertical-align: middle;" class="{{ class }}">
+  {% endmacro %}
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/svg-filters.css') }}">
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -170,6 +174,30 @@
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
       }
       
+      .btn-primary-fms img,
+      .btn-primary-fms:hover img {
+        filter: brightness(0) invert(1);
+      }
+      
+      /* Rendre les SVG blancs sur les boutons avec fonds colorés */
+      .btn-primary img,
+      .btn-danger img,
+      .btn-success img,
+      .btn-info img,
+      .btn-warning img,
+      .btn-dark img,
+      .btn-secondary img {
+        filter: brightness(0) invert(1);
+      }
+      
+      .btn-outline-primary:hover img,
+      .btn-outline-danger:hover img,
+      .btn-outline-success:hover img,
+      .btn-outline-info:hover img,
+      .btn-outline-warning:hover img {
+        filter: brightness(0) invert(1);
+      }
+      
       .btn-outline-secondary-fms {
         border-color: #6c757d;
         color: #6c757d;
@@ -305,8 +333,8 @@
         width: 56px;
         height: 56px;
         border-radius: 50%;
-        background-color: #1a3b50;
-        color: white;
+        background-color: #ffc107;
+        color: #1a3b50;
         border: none;
         cursor: pointer;
         display: flex;
@@ -318,9 +346,10 @@
       }
       
       .chat-button:hover {
-        background-color: #03192f;
+        background-color: #ffb300;
         transform: scale(1.05);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        color: #1a3b50;
       }
       
       .chat-button svg {
@@ -412,7 +441,7 @@
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
         display: none;
         flex-direction: column;
-        z-index: 1001;
+        z-index: 1050;
         overflow: hidden;
       }
       
@@ -421,8 +450,8 @@
       }
       
       .chat-header {
-        background-color: #1a3b50;
-        color: white;
+        background-color: #ffc107;
+        color: #1a3b50;
         padding: 16px;
         border-radius: 12px 12px 0 0;
         display: flex;
@@ -449,9 +478,9 @@
       
       .chat-filter-btn {
         padding: 6px 12px;
-        background-color: rgba(255, 255, 255, 0.2);
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        background-color: rgba(26, 59, 80, 0.1);
+        color: #1a3b50;
+        border: 1px solid rgba(26, 59, 80, 0.2);
         border-radius: 4px;
         cursor: pointer;
         font-size: 12px;
@@ -460,13 +489,13 @@
       }
       
       .chat-filter-btn:hover {
-        background-color: rgba(255, 255, 255, 0.3);
+        background-color: rgba(26, 59, 80, 0.2);
       }
       
       .chat-filter-btn.active {
-        background-color: white;
-        color: #1a3b50;
-        border-color: white;
+        background-color: #1a3b50;
+        color: #ffc107;
+        border-color: #1a3b50;
       }
       
       .chat-tabs {
@@ -525,9 +554,9 @@
         width: 56px;
         height: 56px;
         border-radius: 50%;
-        background-color: #1a3b50;
-        color: white !important;
-        border: 3px solid white;
+        background-color: #ffc107;
+        color: #1a3b50 !important;
+        border: 3px solid #1a3b50;
         cursor: pointer;
         display: flex !important;
         align-items: center;
@@ -545,7 +574,12 @@
       }
       
       .chat-add-report-btn:hover {
-        background-color: #03192f;
+        background-color: #ffb300;
+      }
+      
+      .chat-add-report-btn img {
+        filter: brightness(0);
+      }
         transform: scale(1.1);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
         color: white !important;
@@ -640,7 +674,7 @@
       .chat-expand-btn {
         background: transparent;
         border: none;
-        color: white;
+        color: #1a3b50;
         cursor: pointer;
         padding: 4px 8px;
         border-radius: 4px;
@@ -655,8 +689,8 @@
       }
       
       .chat-expand-btn:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-        color: white;
+        background-color: rgba(26, 59, 80, 0.1);
+        color: #1a3b50;
         text-decoration: none;
       }
       
@@ -668,7 +702,7 @@
       .chat-close {
         background: transparent;
         border: none;
-        color: white;
+        color: #1a3b50;
         font-size: 24px;
         cursor: pointer;
         padding: 0;
@@ -682,7 +716,7 @@
       }
       
       .chat-close:hover {
-        background-color: rgba(255, 255, 255, 0.2);
+        background-color: rgba(26, 59, 80, 0.1);
       }
       
       .chat-messages {
@@ -886,8 +920,8 @@
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background-color: #1a3b50;
-        color: white !important;
+        background-color: #ffc107;
+        color: #1a3b50 !important;
         border: 2px solid #1a3b50;
         cursor: pointer;
         display: flex !important;
@@ -904,10 +938,14 @@
       }
       
       .chat-add-report-btn-input:hover {
-        background-color: #03192f;
+        background-color: #ffb300;
         transform: scale(1.05);
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-        color: white !important;
+        color: #1a3b50 !important;
+      }
+      
+      .chat-add-report-btn-input img {
+        filter: brightness(0);
       }
       
       .chat-input {
@@ -920,8 +958,8 @@
       
       .chat-send-btn {
         padding: 10px 20px;
-        background-color: #1a3b50;
-        color: white;
+        background-color: #ffc107;
+        color: #1a3b50;
         border: none;
         border-radius: 6px;
         cursor: pointer;
@@ -930,7 +968,12 @@
       }
       
       .chat-send-btn:hover {
-        background-color: #03192f;
+        background-color: #ffb300;
+        color: #1a3b50;
+      }
+      
+      .chat-send-btn img {
+        filter: brightness(0);
       }
       
       .chat-send-btn:disabled {
@@ -971,31 +1014,28 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           {% if current_user.is_authenticated %}
           <ul class="navbar-nav me-auto">
-            <!-- Famille 2 : Machines, Maintenances et Relevé compteurs -->
+            <!-- 1. Machines & Maintenances -->
             <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown2" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown1" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                 {{ t('Machines & Maintenances') }}
               </a>
-              <ul class="dropdown-menu" aria-labelledby="navbarDropdown2">
+              <ul class="dropdown-menu" aria-labelledby="navbarDropdown1">
                 <li><a class="dropdown-item" href="{{ url_for('machines') }}">{{ t('Machines') }}</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('maintenances_list') }}">{{ t('Maintenances') }}</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('maintenance_manage') }}">{{ t('Gestion des maintenances') }}</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('checklists_manage') }}">{{ t('Check lists') }}</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('counter_logs') }}">{{ t('Relevé de compteur') }}</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('maintenance_manage') }}">{{ t('Maintenances') }}</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{{ url_for('maintenance_tracking') }}">{{ t('Suivi M&Ms') }}</a></li>
               </ul>
             </li>
-            <!-- Famille 3 : Produits, Mouvements et Stocks -->
+            <!-- 2. Stocks & Produits -->
             <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown3" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown2" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                 {{ t('Stocks') }} & {{ t('Produits') }}
               </a>
-              <ul class="dropdown-menu" aria-labelledby="navbarDropdown3">
-                <li><a class="dropdown-item" href="{{ url_for('products') }}">{{ t('Produits') }}</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('movements') }}">{{ t('Mouvements') }}</a></li>
-                {% if current_user.user_type in ['admin', 'gestionnaire'] %}
+              <ul class="dropdown-menu" aria-labelledby="navbarDropdown2">
                 <li><a class="dropdown-item" href="{{ url_for('stocks') }}">{{ t('Stocks') }}</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('inventories_list') }}">{{ t('Inventaires') }}</a></li>
-                {% endif %}
+                <li><a class="dropdown-item" href="{{ url_for('products') }}">{{ t('Produits') }}</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{{ url_for('stock_tracking') }}">{{ t('Suivi S&P') }}</a></li>
               </ul>
             </li>
             {% if current_user.user_type == 'admin' %}
@@ -1013,39 +1053,85 @@
           <ul class="navbar-nav">
             <!-- Sélecteur de langue -->
             <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" id="languageDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: white !important;">
-                {% if current_lang == 'fr' %}🇫🇷 FR
-                {% elif current_lang == 'es' %}🇪🇸 ES
-                {% elif current_lang == 'en' %}🇬🇧 EN
+              <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="languageDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: white !important;">
+                {% if current_lang == 'fr' %}
+                <img src="{{ url_for('static', filename='icons/flag-fr.svg') }}" alt="FR" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>FR</span>
+                {% elif current_lang == 'es' %}
+                <img src="{{ url_for('static', filename='icons/flag-es.svg') }}" alt="ES" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>ES</span>
+                {% elif current_lang == 'en' %}
+                <img src="{{ url_for('static', filename='icons/flag-en.svg') }}" alt="EN" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>EN</span>
+                {% elif current_lang == 'it' %}
+                <img src="{{ url_for('static', filename='icons/flag-it.svg') }}" alt="IT" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>IT</span>
                 {% endif %}
               </a>
               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
-                <li><a class="dropdown-item {% if current_lang == 'fr' %}active{% endif %}" href="{{ url_for('set_language', lang='fr') }}">🇫🇷 Français</a></li>
-                <li><a class="dropdown-item {% if current_lang == 'es' %}active{% endif %}" href="{{ url_for('set_language', lang='es') }}">🇪🇸 Español</a></li>
-                <li><a class="dropdown-item {% if current_lang == 'en' %}active{% endif %}" href="{{ url_for('set_language', lang='en') }}">🇬🇧 English</a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'fr' %}active{% endif %}" href="{{ url_for('set_language', lang='fr') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-fr.svg') }}" alt="FR" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>Français</span>
+                </a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'es' %}active{% endif %}" href="{{ url_for('set_language', lang='es') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-es.svg') }}" alt="ES" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>Español</span>
+                </a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'en' %}active{% endif %}" href="{{ url_for('set_language', lang='en') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-en.svg') }}" alt="EN" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>English</span>
+                </a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'it' %}active{% endif %}" href="{{ url_for('set_language', lang='it') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-it.svg') }}" alt="IT" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>Italiano</span>
+                </a></li>
               </ul>
             </li>
             <li class="nav-item">
               <span class="nav-link me-3" style="cursor: default; color: white !important;">{{ current_user.username }} ({{ current_user.user_type }})</span>
             </li>
             <li class="nav-item">
-              <a class="nav-link logout-btn" href="{{ url_for('logout') }}" title="{{ t('Déconnexion') }}">⏻</a>
+              <a class="nav-link logout-btn" href="{{ url_for('logout') }}" title="{{ t('Déconnexion') }}">
+                <img src="{{ url_for('static', filename='icons/power.svg') }}" alt="Déconnexion" style="width: 20px; height: 20px; filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);">
+              </a>
             </li>
           </ul>
           {% else %}
           <ul class="navbar-nav ms-auto">
             <!-- Sélecteur de langue pour utilisateurs non connectés -->
             <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" id="languageDropdownGuest" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: white !important;">
-                {% if current_lang == 'fr' %}🇫🇷 FR
-                {% elif current_lang == 'es' %}🇪🇸 ES
-                {% elif current_lang == 'en' %}🇬🇧 EN
+              <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="languageDropdownGuest" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: white !important;">
+                {% if current_lang == 'fr' %}
+                <img src="{{ url_for('static', filename='icons/flag-fr.svg') }}" alt="FR" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>FR</span>
+                {% elif current_lang == 'es' %}
+                <img src="{{ url_for('static', filename='icons/flag-es.svg') }}" alt="ES" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>ES</span>
+                {% elif current_lang == 'en' %}
+                <img src="{{ url_for('static', filename='icons/flag-en.svg') }}" alt="EN" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>EN</span>
+                {% elif current_lang == 'it' %}
+                <img src="{{ url_for('static', filename='icons/flag-it.svg') }}" alt="IT" style="width: 20px; height: 14px; margin-right: 6px;">
+                <span>IT</span>
                 {% endif %}
               </a>
               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdownGuest">
-                <li><a class="dropdown-item {% if current_lang == 'fr' %}active{% endif %}" href="{{ url_for('set_language', lang='fr') }}">🇫🇷 Français</a></li>
-                <li><a class="dropdown-item {% if current_lang == 'es' %}active{% endif %}" href="{{ url_for('set_language', lang='es') }}">🇪🇸 Español</a></li>
-                <li><a class="dropdown-item {% if current_lang == 'en' %}active{% endif %}" href="{{ url_for('set_language', lang='en') }}">🇬🇧 English</a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'fr' %}active{% endif %}" href="{{ url_for('set_language', lang='fr') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-fr.svg') }}" alt="FR" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>Français</span>
+                </a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'es' %}active{% endif %}" href="{{ url_for('set_language', lang='es') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-es.svg') }}" alt="ES" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>Español</span>
+                </a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'en' %}active{% endif %}" href="{{ url_for('set_language', lang='en') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-en.svg') }}" alt="EN" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>English</span>
+                </a></li>
+                <li><a class="dropdown-item d-flex align-items-center {% if current_lang == 'it' %}active{% endif %}" href="{{ url_for('set_language', lang='it') }}">
+                  <img src="{{ url_for('static', filename='icons/flag-it.svg') }}" alt="IT" style="width: 20px; height: 14px; margin-right: 8px;">
+                  <span>Italiano</span>
+                </a></li>
               </ul>
             </li>
             <li class="nav-item">
@@ -1081,8 +1167,8 @@
     </a>
     
     <!-- Chat Component -->
-    <button class="chat-button" id="chat-button" title="Chat et informations">
-      <img src="{{ url_for('static', filename='icons/chat.svg') }}" alt="Chat" style="width: 28px; height: 28px; filter: brightness(0) invert(1);">
+    <button class="chat-button" id="chat-button" title="{{ t('Chat et informations') }}">
+      <img src="{{ url_for('static', filename='icons/chat.svg') }}" alt="Chat" style="width: 28px; height: 28px; filter: brightness(0);">
       <span class="chat-badge manual" id="chat-badge-manual" style="display: none;">0</span>
       <span class="chat-badge auto" id="chat-badge-auto" style="display: none;">0</span>
     </button>
@@ -1090,9 +1176,9 @@
     <div class="chat-window" id="chat-window">
       <div class="chat-header">
         <div class="chat-header-top">
-          <h5>Chat et Informations</h5>
+          <h5>{{ t('Chat et Informations') }}</h5>
           <div class="chat-header-actions">
-            <a href="{{ url_for('chat_full_page') }}" class="chat-expand-btn" id="chat-expand-btn" title="Ouvrir en pleine page" target="_blank">
+            <a href="{{ url_for('chat_full_page') }}" class="chat-expand-btn" id="chat-expand-btn" title="{{ t('Ouvrir en pleine page') }}" target="_blank">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 3h3v3"></path>
                 <path d="M18 21h3v-3"></path>
@@ -1108,10 +1194,10 @@
           </div>
         </div>
         <div class="chat-filters">
-          <button class="chat-filter-btn active" data-filter="all" id="filter-all">Tous</button>
-          <button class="chat-filter-btn" data-filter="manual" id="filter-manual">Messages</button>
-          <button class="chat-filter-btn" data-filter="auto" id="filter-auto">Système</button>
-          <button class="chat-filter-btn" data-filter="report" id="filter-report">Rapport</button>
+          <button class="chat-filter-btn active" data-filter="all" id="filter-all">{{ t('Tous') }}</button>
+          <button class="chat-filter-btn" data-filter="manual" id="filter-manual">{{ t('Messages') }}</button>
+          <button class="chat-filter-btn" data-filter="auto" id="filter-auto">{{ t('Système') }}</button>
+          <button class="chat-filter-btn" data-filter="report" id="filter-report">{{ t('Rapport') }}</button>
         </div>
       </div>
       <div class="chat-messages" id="chat-messages">
@@ -1120,11 +1206,11 @@
       <div class="chat-input-area" id="chat-input-area">
         <div id="chat-reply-preview" style="display: none;"></div>
         <form class="chat-input-form" id="chat-form">
-          <button type="button" class="chat-add-report-btn-input" id="chat-add-report-btn" title="Créer un rapport">
+          <button type="button" class="chat-add-report-btn-input" id="chat-add-report-btn" title="{{ t('Créer un rapport') }}">
             +
           </button>
-          <input type="text" class="chat-input" id="chat-input" placeholder="Tapez votre message..." required>
-          <button type="submit" class="chat-send-btn" id="chat-send-btn">Envoyer</button>
+          <input type="text" class="chat-input" id="chat-input" placeholder="{{ t('Tapez votre message...') }}" required>
+          <button type="submit" class="chat-send-btn" id="chat-send-btn">{{ t('Envoyer') }}</button>
         </form>
       </div>
     </div>
@@ -1135,28 +1221,28 @@
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="reportModalTitle">Créer un rapport</h5>
+            <h5 class="modal-title" id="reportModalTitle">{{ t('Créer un rapport') }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
             <form id="report-form">
               <input type="hidden" id="report-id" name="report_id">
               <div class="mb-3">
-                <label for="report-content" class="form-label">Contenu du rapport</label>
-                <textarea class="form-control" id="report-content" name="content" rows="6" required placeholder="Décrivez votre rapport de poste/jour..."></textarea>
+                <label for="report-content" class="form-label">{{ t('Contenu du rapport') }}</label>
+                <textarea class="form-control" id="report-content" name="content" rows="6" required placeholder="{{ t('Décrivez votre rapport de poste/jour...') }}"></textarea>
               </div>
               <div class="mb-3">
-                <label for="report-photos" class="form-label">Photos (optionnel)</label>
+                <label for="report-photos" class="form-label">{{ t('Photos (optionnel)') }}</label>
                 <input type="file" class="form-control" id="report-photos" name="photos" multiple accept="image/*">
-                <small class="form-text text-muted">Vous pouvez sélectionner plusieurs photos</small>
+                <small class="form-text text-muted">{{ t('Vous pouvez sélectionner plusieurs photos') }}</small>
               </div>
               <div id="report-photos-preview" class="mb-3"></div>
               <div id="report-existing-photos" class="mb-3"></div>
             </form>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-            <button type="button" class="btn btn-primary" id="report-submit-btn">Enregistrer</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('Annuler') }}</button>
+            <button type="button" class="btn btn-primary" id="report-submit-btn">{{ t('Enregistrer') }}</button>
           </div>
         </div>
       </div>
@@ -1179,6 +1265,31 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     {% if current_user.is_authenticated %}
     <script>
+      // Chat translations
+      const chatTranslations = {
+        'Tapez votre message...': '{{ t("Tapez votre message...") }}',
+        'Envoyer': '{{ t("Envoyer") }}',
+        'Modifier': '{{ t("Modifier") }}',
+        'Modifier le message...': '{{ t("Modifier le message...") }}',
+        'Répondre à': '{{ t("Répondre à") }}',
+        'Aucun message': '{{ t("Aucun message") }}',
+        'Aucun message écrit': '{{ t("Aucun message écrit") }}',
+        'Aucun message système': '{{ t("Aucun message système") }}',
+        'Aucun rapport': '{{ t("Aucun rapport") }}',
+        'Créer un rapport': '{{ t("Créer un rapport") }}',
+        'Modifier le rapport': '{{ t("Modifier le rapport") }}',
+        'Supprimer': '{{ t("Supprimer") }}',
+        'Répondre': '{{ t("Répondre") }}',
+        'Êtes-vous sûr de vouloir supprimer ce rapport ?': '{{ t("Êtes-vous sûr de vouloir supprimer ce rapport ?") }}',
+        'Êtes-vous sûr de vouloir supprimer ce message ?': '{{ t("Êtes-vous sûr de vouloir supprimer ce message ?") }}',
+        'Impossible de modifier le rapport': '{{ t("Impossible de modifier le rapport") }}',
+        'Impossible de supprimer le rapport': '{{ t("Impossible de supprimer le rapport") }}',
+        'Impossible de supprimer le message': '{{ t("Impossible de supprimer le message") }}',
+        'Impossible de modifier le message': '{{ t("Impossible de modifier le message") }}',
+        'Impossible d\'envoyer le message': '{{ t("Impossible d\'envoyer le message") }}',
+        'Erreur': '{{ t("Erreur") }}'
+      };
+      
       // Chat functionality
       (function() {
         const chatButton = document.getElementById('chat-button');
@@ -1232,7 +1343,7 @@
             editingReportId = null;
             const reportModalTitle = document.getElementById('reportModalTitle');
             const reportForm = document.getElementById('report-form');
-            if (reportModalTitle) reportModalTitle.textContent = 'Créer un rapport';
+            if (reportModalTitle) reportModalTitle.textContent = chatTranslations['Créer un rapport'];
             if (reportForm) reportForm.reset();
             const reportId = document.getElementById('report-id');
             if (reportId) reportId.value = '';
@@ -1290,7 +1401,7 @@
                 lastMessagesHash = ''; // Réinitialiser le hash pour forcer le re-rendu
                 loadMessages();
               } else {
-                alert('Erreur : ' + (data.error || 'Impossible de modifier le rapport'));
+                alert(chatTranslations['Erreur'] + ' : ' + (data.error || chatTranslations['Impossible de modifier le rapport']));
               }
             })
             .catch(error => {
@@ -1309,7 +1420,7 @@
                 lastMessagesHash = ''; // Réinitialiser le hash pour forcer le re-rendu
                 loadMessages();
               } else {
-                alert('Erreur : ' + (data.error || 'Impossible de créer le rapport'));
+                alert(chatTranslations['Erreur'] + ' : ' + (data.error || chatTranslations['Impossible de modifier le rapport']));
               }
             })
             .catch(error => {
@@ -1336,7 +1447,7 @@
                   const photosPreview = document.getElementById('report-photos-preview');
                   const existingPhotosDiv = document.getElementById('report-existing-photos');
                   
-                  if (reportModalTitle) reportModalTitle.textContent = 'Modifier le rapport';
+                  if (reportModalTitle) reportModalTitle.textContent = chatTranslations['Modifier le rapport'];
                   if (reportContent) reportContent.value = report.content;
                   if (reportIdInput) reportIdInput.value = report.id;
                   if (photosPreview) photosPreview.innerHTML = '';
@@ -1365,7 +1476,7 @@
                       
                       const label = document.createElement('label');
                       label.htmlFor = `photo-${photo.id}`;
-                      label.textContent = 'Supprimer';
+                      label.textContent = chatTranslations['Supprimer'];
                       label.style.cursor = 'pointer';
                       
                       photoDiv.appendChild(img);
@@ -1387,7 +1498,7 @@
         
         // Delete report function
         window.deleteReport = function(reportId) {
-          if (confirm('Êtes-vous sûr de vouloir supprimer ce rapport ?')) {
+          if (confirm(chatTranslations['Êtes-vous sûr de vouloir supprimer ce rapport ?'])) {
             fetch(`/reports/${reportId}`, {
               method: 'DELETE'
             })
@@ -1397,7 +1508,7 @@
                 lastMessagesHash = ''; // Réinitialiser le hash pour forcer le re-rendu
                 loadMessages();
               } else {
-                alert('Erreur : ' + (data.error || 'Impossible de supprimer le rapport'));
+                alert(chatTranslations['Erreur'] + ' : ' + (data.error || chatTranslations['Impossible de supprimer le rapport']));
               }
             })
             .catch(error => {
@@ -1411,15 +1522,15 @@
         function cancelReply() {
           replyingTo = null;
           chatReplyPreview.style.display = 'none';
-          chatInput.placeholder = 'Tapez votre message...';
+          chatInput.placeholder = chatTranslations['Tapez votre message...'];
         }
         
         // Cancel edit
         function cancelEdit() {
           editingMessageId = null;
           chatInput.value = '';
-          chatInput.placeholder = 'Tapez votre message...';
-          chatSendBtn.textContent = 'Envoyer';
+          chatInput.placeholder = chatTranslations['Tapez votre message...'];
+          chatSendBtn.textContent = chatTranslations['Envoyer'];
         }
         
         // Toggle chat window
@@ -1541,12 +1652,12 @@
                       emptyDiv.style.textAlign = 'center';
                       emptyDiv.style.color = '#6c757d';
                       emptyDiv.textContent = currentFilter === 'all' 
-                        ? 'Aucun message' 
+                        ? chatTranslations['Aucun message'] 
                         : currentFilter === 'manual' 
-                          ? 'Aucun message écrit' 
+                          ? chatTranslations['Aucun message écrit'] 
                           : currentFilter === 'auto'
-                            ? 'Aucun message système'
-                            : 'Aucun rapport';
+                            ? chatTranslations['Aucun message système']
+                            : chatTranslations['Aucun rapport'];
                       chatMessages.appendChild(emptyDiv);
                     } else {
                       items.forEach(item => {
@@ -1615,13 +1726,13 @@
                     
                     if (msg.is_own) {
                       actionsDiv.innerHTML = `
-                        <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="Répondre">↩</button>
-                        <button class="chat-message-action-btn" onclick="editMessage(${msg.id}, '${msg.content.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" title="Modifier">✏</button>
-                        <button class="chat-message-action-btn" onclick="deleteMessage(${msg.id})" title="Supprimer">🗑</button>
+                        <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
+                        <button class="chat-message-action-btn" onclick="editMessage(${msg.id}, '${msg.content.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
+                        <button class="chat-message-action-btn" onclick="deleteMessage(${msg.id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
                       `;
                     } else {
                       actionsDiv.innerHTML = `
-                        <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="Répondre">↩</button>
+                        <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
                       `;
                     }
                     headerRight.appendChild(actionsDiv);
@@ -1678,8 +1789,8 @@
                     const actionsDiv = document.createElement('div');
                     actionsDiv.className = 'chat-message-actions';
                     actionsDiv.innerHTML = `
-                      <button class="chat-message-action-btn" onclick="editReport(${report.report_id})" title="Modifier">✏</button>
-                      <button class="chat-message-action-btn" onclick="deleteReport(${report.report_id})" title="Supprimer">🗑</button>
+                      <button class="chat-message-action-btn" onclick="editReport(${report.report_id})" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
+                      <button class="chat-message-action-btn" onclick="deleteReport(${report.report_id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
                     `;
                     headerRight.appendChild(actionsDiv);
                   }
@@ -1757,7 +1868,7 @@
               <button class="chat-reply-preview-close" onclick="cancelReply()">×</button>
             `;
             chatReplyPreview.style.display = 'block';
-            chatInput.placeholder = 'Répondre à ' + userName + '...';
+            chatInput.placeholder = chatTranslations['Répondre à'] + ' ' + userName + '...';
             chatInput.focus();
             cancelEdit(); // Cancel any edit in progress
           }
@@ -1767,15 +1878,15 @@
         window.editMessage = function(messageId, currentContent) {
           editingMessageId = messageId;
           chatInput.value = currentContent;
-          chatInput.placeholder = 'Modifier le message...';
-          chatSendBtn.textContent = 'Modifier';
+          chatInput.placeholder = chatTranslations['Modifier le message...'];
+          chatSendBtn.textContent = chatTranslations['Modifier'];
           cancelReply(); // Cancel any reply in progress
           chatInput.focus();
         };
         
         // Delete message
         window.deleteMessage = function(messageId) {
-          if (!confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) return;
+          if (!confirm(chatTranslations['Êtes-vous sûr de vouloir supprimer ce message ?'])) return;
           
           fetch(`/chat/${messageId}/delete`, {
             method: 'POST',
@@ -1789,7 +1900,7 @@
               lastMessagesHash = ''; // Réinitialiser le hash pour forcer le re-rendu
               loadMessages();
             } else {
-              alert('Erreur: ' + (data.error || 'Impossible de supprimer le message'));
+              alert(chatTranslations['Erreur'] + ': ' + (data.error || chatTranslations['Impossible de supprimer le message']));
             }
           })
           .catch(error => {
@@ -1825,7 +1936,7 @@
                 cancelEdit();
                 loadMessages();
               } else {
-                alert('Erreur: ' + (data.error || 'Impossible de modifier le message'));
+                alert(chatTranslations['Erreur'] + ': ' + (data.error || chatTranslations['Impossible de modifier le message']));
               }
             })
             .catch(error => {
@@ -1856,7 +1967,7 @@
                 loadMessages();
                 markAsRead();
               } else {
-                alert('Erreur: ' + (data.error || 'Impossible d\'envoyer le message'));
+                alert(chatTranslations['Erreur'] + ': ' + (data.error || chatTranslations['Impossible d\'envoyer le message']));
               }
             })
             .catch(error => {

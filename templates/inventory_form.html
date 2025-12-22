@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if is_edit %}Modifier{% else %}Inventaire{% endif %} - {{ stock.name }}{% endblock %}
+{% block title %}{% if is_edit %}{{ t('Modifier') }}{% else %}{{ t('Inventaires') }}{% endif %} - {{ stock.name }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -110,18 +110,18 @@
 <div class="page-header">
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-1">
-      <li class="breadcrumb-item"><a href="{{ url_for('stocks') }}">Stocks</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('stocks') }}">{{ t('Stocks') }}</a></li>
       {% if is_edit %}
-      <li class="breadcrumb-item"><a href="{{ url_for('inventories_list') }}">Inventaires</a></li>
-      <li class="breadcrumb-item"><a href="{{ url_for('inventory_detail', inventory_id=inventory.id) }}">Détails</a></li>
-      <li class="breadcrumb-item active" aria-current="page">Modifier</li>
+      <li class="breadcrumb-item"><a href="{{ url_for('inventories_list') }}">{{ t('Inventaires') }}</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('inventory_detail', inventory_id=inventory.id) }}">{{ t('Détails') }}</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ t('Modifier') }}</li>
       {% else %}
       <li class="breadcrumb-item"><a href="{{ url_for('manage_stock', stock_id=stock.id) }}">{{ stock.name }}</a></li>
-      <li class="breadcrumb-item active" aria-current="page">Inventaire</li>
+      <li class="breadcrumb-item active" aria-current="page">{{ t('Inventaires') }}</li>
       {% endif %}
     </ol>
   </nav>
-  <h1 class="page-title">{% if is_edit %}Modifier l'inventaire{% else %}Inventaire{% endif %} - {{ stock.name }} ({{ stock.code }})</h1>
+  <h1 class="page-title">{% if is_edit %}{{ t('Modifier l\'inventaire') }}{% else %}{{ t('Inventaires') }}{% endif %} - {{ stock.name }} ({{ stock.code }})</h1>
 </div>
 
 <div class="form-card">
@@ -130,11 +130,11 @@
     <table class="table table-striped">
       <thead>
         <tr>
-          <th>Produit</th>
-          <th>Code</th>
-          <th>Quantité actuelle</th>
-          <th>Nouvelle quantité</th>
-          <th>Commentaire</th>
+          <th>{{ t('Produits') }}</th>
+          <th>{{ t('Code') }}</th>
+          <th>{{ t('Quantité actuelle') }}</th>
+          <th>{{ t('Nouvelle quantité') }}</th>
+          <th>{{ t('Commentaire (optionnel)') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -163,14 +163,14 @@
               type="text" 
               class="form-control" 
               name="comment" 
-              placeholder="Commentaire (optionnel)"
+              placeholder="{{ t('Commentaire (optionnel)') }}"
             />
           </td>
         </tr>
         {% endfor %}
         {% if not products_data %}
         <tr>
-          <td colspan="5" class="text-center text-muted">Aucun produit dans ce stock</td>
+          <td colspan="5" class="text-center text-muted">{{ t('Aucun produit dans ce stock') }}</td>
         </tr>
         {% endif %}
       </tbody>
@@ -184,7 +184,7 @@
     {% else %}
     <a href="{{ url_for('manage_stock', stock_id=stock.id) }}" class="btn btn-secondary">Annuler</a>
     {% endif %}
-    <button type="submit" class="btn btn-success">{% if is_edit %}Modifier{% else %}Enregistrer{% endif %} l'inventaire</button>
+    <button type="submit" class="btn btn-success">{% if is_edit %}{{ t('Modifier l\'inventaire') }}{% else %}{{ t('Enregistrer l\'inventaire') }}{% endif %}</button>
   </div>
   {% else %}
   <div class="mt-3">

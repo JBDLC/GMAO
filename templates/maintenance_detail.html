@@ -128,7 +128,7 @@
       <a class="btn btn-outline-secondary" href="{{ url_for('new_maintenance') }}">Nouveau modèle</a>
       {% if current_user.user_type == 'admin' %}
       <form method="post" action="{{ url_for('delete_maintenance_report', report_id=report.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce modèle de maintenance ? Cette action est irréversible.');">
-        <button type="submit" class="btn btn-outline-danger" title="Supprimer">🗑️</button>
+        <button type="submit" class="btn btn-outline-danger" title="Supprimer"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
       </form>
       {% endif %}
     </div>

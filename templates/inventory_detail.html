@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Inventaire - {{ inventory.stock.name }}{% endblock %}
+{% block title %}{{ t('Inventaires') }} - {{ inventory.name or inventory.stock.name }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -106,25 +106,25 @@
 <div class="page-header">
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-1">
-      <li class="breadcrumb-item"><a href="{{ url_for('stocks') }}">Stocks</a></li>
-      <li class="breadcrumb-item"><a href="{{ url_for('inventories_list') }}">Inventaires</a></li>
-      <li class="breadcrumb-item active" aria-current="page">Détails</li>
+      <li class="breadcrumb-item"><a href="{{ url_for('stocks') }}">{{ t('Stocks') }}</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('inventories_list') }}">{{ t('Inventaires') }}</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ t('Détails') }}</li>
     </ol>
   </nav>
   <div class="d-flex justify-content-between align-items-center">
     <div>
-      <h1 class="page-title">Inventaire - {{ inventory.stock.name }} ({{ inventory.stock.code }})</h1>
+      <h1 class="page-title">{{ inventory.name or (t('Inventaire -') + ' ' + inventory.stock.name) }} ({{ inventory.stock.code }})</h1>
       <p class="text-muted mb-0 mt-2">
-        Date : {{ inventory.created_at.strftime("%d/%m/%Y %H:%M") }} · 
-        Utilisateur : {{ inventory.user.username }}
+        {{ t('Date') }} : {{ inventory.created_at.strftime("%d/%m/%Y %H:%M") }} · 
+        {{ t('Utilisateurs') }} : {{ inventory.user.username }}
       </p>
     </div>
     <div class="btn-group">
-    <a href="{{ url_for('export_inventories') }}" class="btn btn-success" title="Exporter en Excel">📊 Export Excel</a>
+    <a href="{{ url_for('export_inventories') }}" class="btn btn-success" title="{{ t('Exporter en Excel') }}"><img src="{{ url_for('static', filename='icons/export.svg') }}" alt="Export" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> {{ t('Export Excel') }}</a>
     {% if current_user.user_type == 'admin' %}
-    <a href="{{ url_for('edit_inventory', inventory_id=inventory.id) }}" class="btn btn-outline-secondary" title="Modifier">✏️ Modifier</a>
-    <form method="post" action="{{ url_for('delete_inventory', inventory_id=inventory.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cet inventaire ? Cette action restaurera les quantités précédentes et est irréversible.');">
-      <button type="submit" class="btn btn-outline-danger" title="Supprimer">🗑️ Supprimer</button>
+    <a href="{{ url_for('edit_inventory', inventory_id=inventory.id) }}" class="btn btn-outline-secondary" title="{{ t('Modifier') }}"><img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="{{ t('Modifier') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> {{ t('Modifier') }}</a>
+    <form method="post" action="{{ url_for('delete_inventory', inventory_id=inventory.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cet inventaire ? Cette action restaurera les quantités précédentes et est irréversible.') }}');">
+      <button type="submit" class="btn btn-outline-danger" title="{{ t('Supprimer') }}"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="{{ t('Supprimer') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> {{ t('Supprimer') }}</button>
     </form>
     {% endif %}
   </div>
@@ -134,14 +134,14 @@
 <div class="table-responsive mt-3">
   <table class="table table-striped">
     <thead>
-      <tr>
-        <th>Produit</th>
-        <th>Code</th>
-        <th>Quantité précédente</th>
-        <th>Nouvelle quantité</th>
-        <th>Différence</th>
-        <th>Commentaire</th>
-      </tr>
+        <tr>
+          <th>{{ t('Produits') }}</th>
+          <th>{{ t('Code') }}</th>
+          <th>{{ t('Quantité précédente') }}</th>
+          <th>{{ t('Nouvelle quantité') }}</th>
+          <th>{{ t('Différence') }}</th>
+          <th>{{ t('Commentaire (optionnel)') }}</th>
+        </tr>
     </thead>
     <tbody>
       {% for item in inventory.items %}
@@ -170,12 +170,12 @@
 </div>
 {% else %}
 <div class="alert alert-info mt-3" style="background-color: #e3f2fd; border-color: #1a3b50; color: #1a3b50;">
-  <p class="mb-0">Aucune modification enregistrée pour cet inventaire.</p>
+  <p class="mb-0">{{ t('Aucune modification enregistrée pour cet inventaire.') }}</p>
 </div>
 {% endif %}
 
 <div class="mt-3">
-  <a href="{{ url_for('inventories_list') }}" class="btn btn-secondary">Retour à la liste</a>
+  <a href="{{ url_for('inventories_list') }}" class="btn btn-secondary">{{ t('Retour à la liste') }}</a>
 </div>
 {% endblock %}
 

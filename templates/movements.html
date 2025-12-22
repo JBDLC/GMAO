@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Mouvements{% endblock %}
+{% block title %}{{ t('Mouvements') }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -134,12 +134,12 @@
 
 <div class="page-header">
   <div class="d-flex justify-content-between align-items-center">
-    <h1 class="page-title">Mouvements</h1>
+    <h1 class="page-title">{{ t('Mouvements') }}</h1>
   <div class="btn-group">
-    <a href="{{ url_for('export_movements') }}" class="btn btn-success" title="Exporter en Excel">📊 Export Excel</a>
+    <a href="{{ url_for('export_movements') }}" class="btn btn-success" title="{{ t('Exporter en Excel') }}"><img src="{{ url_for('static', filename='icons/export.svg') }}" alt="Export" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> {{ t('Export Excel') }}</a>
     {% if current_user.user_type in ['admin', 'gestionnaire'] %}
     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#movementModal" onclick="openMovementModal()">
-      + Nouveau mouvement
+      + {{ t('Nouveau mouvement') }}
     </button>
     {% endif %}
   </div>
@@ -161,8 +161,8 @@
           </strong>
           <small>{{ move.created_at.strftime("%d/%m/%Y %H:%M") }}</small>
         </div>
-        {% if move.source_stock %}<div>Source : {{ move.source_stock.name }}</div>{% endif %}
-        {% if move.dest_stock %}<div>Destination : {{ move.dest_stock.name }}</div>{% endif %}
+        {% if move.source_stock %}<div>{{ t('Source :') }} {{ move.source_stock.name }}</div>{% endif %}
+        {% if move.dest_stock %}<div>{{ t('Destination :') }} {{ move.dest_stock.name }}</div>{% endif %}
         <ul class="mb-0">
           {% for item in move.items %}
           <li>{{ item.product.name }} ({{ item.product.code }}) - {{ item.quantity|int }}</li>
@@ -171,9 +171,9 @@
       </div>
       {% if not move.is_maintenance_related and current_user.user_type in ['admin', 'gestionnaire'] %}
       <div class="btn-group ms-2">
-        <button type="button" class="btn btn-sm btn-outline-primary" title="Modifier" data-bs-toggle="modal" data-bs-target="#movementModal" onclick="openEditMovementModal({{ move.id }}, '{{ move.type }}', {% if move.source_stock_id %}{{ move.source_stock_id }}{% else %}null{% endif %}, {% if move.dest_stock_id %}{{ move.dest_stock_id }}{% else %}null{% endif %}, '{{ move.created_at.strftime('%Y-%m-%dT%H:%M') }}', {{ move.items|map(attribute='product_id')|list|tojson }}, {{ move.items|map(attribute='quantity')|list|tojson }})">✏️</button>
-        <form method="post" action="{{ url_for('delete_movement', movement_id=move.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce mouvement ?');">
-          <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer">🗑️</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" title="Modifier" data-bs-toggle="modal" data-bs-target="#movementModal" onclick="openEditMovementModal({{ move.id }}, '{{ move.type }}', {% if move.source_stock_id %}{{ move.source_stock_id }}{% else %}null{% endif %}, {% if move.dest_stock_id %}{{ move.dest_stock_id }}{% else %}null{% endif %}, '{{ move.created_at.strftime('%Y-%m-%dT%H:%M') }}', {{ move.items|map(attribute='product_id')|list|tojson }}, {{ move.items|map(attribute='quantity')|list|tojson }})"><img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="Modifier" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
+        <form method="post" action="{{ url_for('delete_movement', movement_id=move.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce mouvement ?') }}');">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
         </form>
       </div>
       {% endif %}

@@ -246,6 +246,12 @@
       stockRows.appendChild(clone);
       const query = stockSearch ? stockSearch.value.trim().toLowerCase() : "";
       filterStockOptions(query);
+      
+      // Appliquer le filtre de stock au nouveau select
+      const stockSelect = document.querySelector('select[name="stock_id"]');
+      if (stockSelect && stockSelect.value) {
+        updateProductsForStock(stockSelect.value);
+      }
     });
   }
 
@@ -286,20 +292,71 @@
       });
   }
 
+  // Fonction pour charger et mettre à jour les produits selon le stock sélectionné
+  function updateProductsForStock(stockId) {
+    if (!stockId) {
+      // Si aucun stock n'est sélectionné, afficher tous les produits
+      stockRows.querySelectorAll('.stock-product-select').forEach(select => {
+        select.querySelectorAll('option').forEach(option => {
+          option.hidden = false;
+        });
+      });
+      return;
+    }
+    
+    // Charger les produits du stock sélectionné
+    fetch(`/api/stock/${stockId}/products`)
+      .then(response => response.json())
+      .then(data => {
+        const products = data.products;
+        const productIds = new Set(products.map(p => p.id));
+        
+        // Mettre à jour toutes les listes déroulantes de produits
+        stockRows.querySelectorAll('.stock-product-select').forEach(select => {
+          const currentValue = select.value;
+          select.querySelectorAll('option').forEach(option => {
+            if (!option.value) {
+              // Garder l'option vide visible
+              option.hidden = false;
+            } else {
+              // Afficher uniquement les produits disponibles dans ce stock
+              option.hidden = !productIds.has(parseInt(option.value));
+            }
+          });
+          
+          // Si le produit actuellement sélectionné n'est plus disponible, le désélectionner
+          if (currentValue && !productIds.has(parseInt(currentValue))) {
+            select.value = '';
+            const row = select.closest('.stock-product-row');
+            const quantityInfo = row.querySelector('.stock-quantity-info');
+            if (quantityInfo) {
+              quantityInfo.style.display = 'none';
+            }
+          } else if (currentValue) {
+            // Mettre à jour la quantité si un produit est sélectionné
+            const row = select.closest('.stock-product-row');
+            const quantityInfo = row.querySelector('.stock-quantity-info');
+            if (quantityInfo) {
+              updateStockQuantity(select, quantityInfo);
+            }
+          }
+        });
+      })
+      .catch(error => {
+        console.error('Erreur lors du chargement des produits:', error);
+      });
+  }
+
   // Écouter les changements de stock et de produit
   const stockSelect = document.querySelector('select[name="stock_id"]');
   if (stockSelect) {
+    // Charger les produits au chargement de la page si un stock est déjà sélectionné
+    if (stockSelect.value) {
+      updateProductsForStock(stockSelect.value);
+    }
+    
     stockSelect.addEventListener('change', () => {
-      // Mettre à jour toutes les quantités affichées
-      stockRows.querySelectorAll('.stock-product-row').forEach(row => {
-        const productSelect = row.querySelector('.stock-product-select');
-        const quantityInfo = row.querySelector('.stock-quantity-info');
-        if (productSelect && productSelect.value && quantityInfo) {
-          updateStockQuantity(productSelect, quantityInfo);
-        } else if (quantityInfo) {
-          quantityInfo.style.display = 'none';
-        }
-      });
+      updateProductsForStock(stockSelect.value);
     });
   }
 

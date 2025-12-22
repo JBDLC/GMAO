@@ -73,6 +73,85 @@
     box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
   }
   
+  .products-actions-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  
+  .products-filter-select {
+    min-width: 150px;
+    max-width: 180px;
+    border-radius: 8px;
+    flex: 0 0 auto;
+  }
+  
+  .page-header .d-flex.justify-content-between {
+    flex-wrap: nowrap;
+    gap: 1rem;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .page-header .page-title {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  
+  .page-header .products-actions-container {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+  
+  .btn-icon-only {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+    flex: 0 0 auto;
+  }
+  
+  .btn-icon-only:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-icon-only img {
+    margin: 0;
+    width: 18px;
+    height: 18px;
+  }
+  
+  .btn-add-product {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex: 0 0 auto;
+  }
+  
+  .btn-add-product:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(26, 59, 80, 0.2);
+  }
+  
   /* Responsive */
   @media (max-width: 768px) {
     .d-flex.justify-content-between {
@@ -81,14 +160,27 @@
       align-items: flex-start !important;
     }
     
-    .btn-group {
-      flex-direction: column;
+    .products-actions-container {
       width: 100%;
+      gap: 0.5rem;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 4px;
+      justify-content: flex-start;
     }
     
-    .btn-group > * {
-      width: 100%;
-      margin-bottom: 0.5rem;
+    .products-filter-select {
+      min-width: 140px;
+      flex-shrink: 0;
+    }
+    
+    .btn-icon-only,
+    .btn-add-product {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      flex: 0 0 40px;
     }
     
     .form-select-sm {
@@ -133,8 +225,8 @@
 <div class="page-header">
   <div class="d-flex justify-content-between align-items-center">
     <h1 class="page-title">{{ t('Produits') }}</h1>
-  <div class="btn-group">
-    <select class="form-select form-select-sm" id="filter_stock" style="width: auto;" onchange="applyFilters()">
+  <div class="products-actions-container">
+    <select class="form-select form-select-sm products-filter-select" id="filter_stock" onchange="applyFilters()">
       <option value="">{{ t('Tous les stocks') }}</option>
       {% for stock in stocks %}
       <option value="{{ stock.id }}" {% if filter_stock_id == stock.id %}selected{% endif %}>
@@ -142,17 +234,21 @@
       </option>
       {% endfor %}
     </select>
-    <button type="button" class="btn btn-outline-warning {% if filter_low_stock %}active{% endif %}" onclick="toggleLowStockFilter()">
-      {{ t('Stock < stock min') }}
+    <button type="button" class="btn btn-outline-warning btn-icon-only {% if filter_low_stock %}active{% endif %}" onclick="toggleLowStockFilter()" title="{{ t('Stock faible') }}">
+      {{ icon_svg('alert-triangle', 18) }}
     </button>
-    <a href="{{ url_for('products') }}" class="btn btn-outline-secondary">{{ t('Réinitialiser') }}</a>
-    <a href="{{ url_for('export_products', filter_name=filter_name, filter_code=filter_code, filter_supplier=filter_supplier, filter_min_stock=filter_min_stock, filter_low_stock=('1' if filter_low_stock else ''), filter_stock_id=(filter_stock_id if filter_stock_id else '')) }}" class="btn btn-success" title="{{ t('Exporter en Excel') }}">📊 {{ t('Export Excel') }}</a>
-    {% if current_user.user_type == 'admin' %}
-    <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#importModal" title="{{ t('Importer des produits depuis Excel') }}">
-      📥 {{ t('Importer Excel') }}
+    <a href="{{ url_for('products') }}" class="btn btn-outline-secondary btn-icon-only" title="{{ t('Réinitialiser les filtres') }}">
+      {{ icon_svg('reset', 18) }}
+    </a>
+    <a href="{{ url_for('export_products', filter_name=filter_name, filter_code=filter_code, filter_supplier=filter_supplier, filter_min_stock=filter_min_stock, filter_low_stock=('1' if filter_low_stock else ''), filter_stock_id=(filter_stock_id if filter_stock_id else '')) }}" class="btn btn-success btn-icon-only" title="{{ t('Exporter en Excel') }}">
+      {{ icon_svg('export', 18) }}
+    </a>
+    {% if can_edit_stocks_products() and not is_readonly_stocks_products() %}
+    <button type="button" class="btn btn-info btn-icon-only" data-bs-toggle="modal" data-bs-target="#importModal" title="{{ t('Importer des produits depuis Excel') }}">
+      {{ icon_svg('import', 18) }}
     </button>
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal(); return false;">
-      + {{ t('Nouveau produit') }}
+    <button type="button" class="btn btn-primary btn-add-product" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal(); return false;" title="{{ t('Nouveau produit') }}">
+      +
     </button>
     {% endif %}
   </div>
@@ -262,14 +358,16 @@
             {{ total|int }}
           </span>
         </td>
-        {% if current_user.user_type == 'admin' %}
+        {% if can_edit_stocks_products() and not is_readonly_stocks_products() %}
         <td class="text-center" style="white-space: nowrap;">
           <button type="button" class="btn btn-outline-primary" style="padding: 0.125rem 0.25rem; font-size: 0.75rem; line-height: 1.2;" onclick="editProduct({{ product.id }})" title="Modifier">
-            ✏️
+            <img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="Modifier" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
           </button>
+          {% if can_delete_products() %}
           <form method="post" action="{{ url_for('delete_product', product_id=product.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce produit ?');">
-            <button type="submit" class="btn btn-outline-danger" style="padding: 0.125rem 0.25rem; font-size: 0.75rem; line-height: 1.2;" title="Supprimer">🗑️</button>
+            <button type="submit" class="btn btn-outline-danger" style="padding: 0.125rem 0.25rem; font-size: 0.75rem; line-height: 1.2;" title="Supprimer"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
           </form>
+          {% endif %}
         </td>
         {% else %}
         <td></td>
@@ -365,7 +463,7 @@
 </div>
 
 <!-- Modal pour importer des produits depuis Excel -->
-{% if current_user.user_type == 'admin' %}
+{% if can_edit_stocks_products() and not is_readonly_stocks_products() %}
 <div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -541,7 +639,12 @@ function applyFilters() {
     if (filterCode) params.set('filter_code', filterCode);
     if (filterSupplier) params.set('filter_supplier', filterSupplier);
     if (filterMinStock) params.set('filter_min_stock', filterMinStock);
-    if (filterStock) params.set('filter_stock_id', filterStock);
+    if (filterStock) {
+      params.set('filter_stock_id', filterStock);
+    } else {
+      // Supprimer le paramètre si on sélectionne "Tous les stocks"
+      params.delete('filter_stock_id');
+    }
     if (lowStockFilterActive) params.set('filter_low_stock', '1');
     
     const queryString = params.toString();

@@ -27,7 +27,7 @@
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
     margin-bottom: 1rem;
     border-left: 4px solid #1a3b50;
     transition: all 0.2s;
@@ -43,6 +43,57 @@
   }
   .stock-card a:hover {
     color: #03192f;
+  }
+  
+  .stock-card .btn-group {
+    gap: 0.5rem;
+    align-items: center;
+  }
+  
+  .stock-card .btn-icon-only {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  
+  .stock-card .btn-icon-only:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .stock-card .btn-icon-only img {
+    margin: 0;
+    width: 18px;
+    height: 18px;
+  }
+  
+  .stock-card .btn-outline-danger {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  
+  .stock-card .btn-outline-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .stock-card .btn-outline-danger img {
+    margin: 0;
+    width: 18px;
+    height: 18px;
   }
   .btn-primary {
     background-color: #1a3b50;
@@ -73,6 +124,54 @@
   .btn-outline-danger:hover {
     background-color: #dc3545;
     color: white;
+  }
+  
+  .stock-card .btn-info.btn-icon-only img {
+    filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(180deg) brightness(0.4) contrast(1.2);
+  }
+  
+  .btn-add-stock {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex: 0 0 auto;
+  }
+  
+  .btn-add-stock:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(26, 59, 80, 0.2);
+  }
+  
+  .btn-icon-only {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  
+  .btn-icon-only:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-icon-only img {
+    margin: 0;
+    width: 18px;
+    height: 18px;
   }
   
   /* Responsive */
@@ -117,8 +216,8 @@
 <div class="page-header">
   <div class="d-flex justify-content-between align-items-center">
     <h1 class="page-title">{{ t('Stocks') }}</h1>
-    {% if current_user.user_type == 'admin' %}
-    <a class="btn btn-primary" href="{{ url_for('new_stock') }}">{{ t('+ Stock') }}</a>
+    {% if can_edit_stocks_products() and not is_readonly_stocks_products() %}
+    <a class="btn btn-primary btn-add-stock" href="{{ url_for('new_stock') }}" title="{{ t('Nouveau stock') }}">+</a>
     {% endif %}
   </div>
 </div>
@@ -134,10 +233,19 @@
       </div>
     </a>
     <div class="btn-group ms-2">
-      <a href="{{ url_for('create_inventory', stock_id=stock.id) }}" class="btn btn-sm btn-info" title="{{ t('Inventaire') }}">📋 {{ t('Inventaire') }}</a>
-      {% if current_user.user_type == 'admin' %}
+      {% if can_edit_stocks_products() and not is_readonly_stocks_products() and current_user.user_type != 'technicien' %}
+      <button type="button" class="btn btn-info btn-icon-only" data-bs-toggle="modal" data-bs-target="#importInventoryModal{{ stock.id }}" title="{{ t('Importer un inventaire depuis Excel') }}">
+        {{ icon_svg('import', 18) }}
+      </button>
+      <a href="{{ url_for('create_inventory', stock_id=stock.id) }}" class="btn btn-info btn-icon-only" title="{{ t('Inventaire manuel') }}">
+        {{ icon_svg('inventory', 18) }}
+      </a>
+      {% endif %}
+      {% if can_delete_stocks() %}
       <form method="post" action="{{ url_for('delete_stock', stock_id=stock.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce stock ? Cette action est irréversible.') }}');">
-        <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer le stock') }}">🗑️</button>
+        <button type="submit" class="btn btn-outline-danger btn-icon-only" title="{{ t('Supprimer le stock') }}">
+          {{ icon_svg('delete', 18) }}
+        </button>
       </form>
       {% endif %}
     </div>
@@ -148,6 +256,46 @@
 <div class="alert alert-info mt-3" style="background-color: #e3f2fd; border-color: #1a3b50; color: #1a3b50;">
   <p class="mb-0">{{ t('Aucun stock.') }}</p>
 </div>
+{% endif %}
+
+{% if can_edit_stocks_products() and not is_readonly_stocks_products() %}
+{% for stock in stocks %}
+<!-- Modal pour importer un inventaire depuis Excel -->
+<div class="modal fade" id="importInventoryModal{{ stock.id }}" tabindex="-1" aria-labelledby="importInventoryModalLabel{{ stock.id }}" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="importInventoryModalLabel{{ stock.id }}">{{ t('Importer un inventaire depuis Excel') }} - {{ stock.name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{{ url_for('import_inventory', stock_id=stock.id) }}" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="excelFile{{ stock.id }}" class="form-label">{{ t('Fichier Excel') }}</label>
+            <input type="file" class="form-control" id="excelFile{{ stock.id }}" name="file" accept=".xlsx,.xls" required />
+            <div class="form-text">
+              {{ t('Le fichier Excel doit contenir les colonnes suivantes (dans l\'ordre) :') }}
+              <ul class="mb-0 mt-2">
+                <li><strong>{{ t('Colonne 1 :') }}</strong> {{ t('Nom du produit (obligatoire)') }}</li>
+                <li><strong>{{ t('Colonne 2 :') }}</strong> {{ t('Code du produit (obligatoire, doit être unique)') }}</li>
+                <li><strong>{{ t('Colonne 3 :') }}</strong> {{ t('Prix (optionnel, défaut: 0)') }}</li>
+                <li><strong>{{ t('Colonne 4 :') }}</strong> {{ t('Fournisseur (optionnel)') }}</li>
+                <li><strong>{{ t('Colonne 5 :') }}</strong> {{ t('Stock minimum (optionnel, défaut: 0)') }}</li>
+                <li><strong>{{ t('Colonne 6 :') }}</strong> {{ t('Quantité (obligatoire pour l\'inventaire)') }}</li>
+              </ul>
+              <p class="mt-2 mb-0"><small class="text-muted">{{ t('Note : Les produits seront créés s\'ils n\'existent pas. La quantité sera utilisée pour créer l\'inventaire.') }}</small></p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('Annuler') }}</button>
+          <button type="submit" class="btn btn-primary">{{ t('Importer') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
 {% endif %}
 {% endblock %}
 

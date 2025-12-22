@@ -1,0 +1,27 @@
+/* Styles pour rendre les SVG blancs sur les fonds colorés */
+
+/* Boutons Bootstrap avec fonds colorés */
+.btn-primary img,
+.btn-danger img,
+.btn-success img,
+.btn-info img,
+.btn-warning img {
+  filter: brightness(0) invert(1);
+}
+
+/* Boutons outline qui deviennent colorés au hover */
+.btn-outline-primary:hover img,
+.btn-outline-danger:hover img,
+.btn-outline-success:hover img,
+.btn-outline-info:hover img,
+.btn-outline-warning:hover img {
+  filter: brightness(0) invert(1);
+}
+
+/* Boutons avec fonds sombres */
+.btn-dark img,
+.btn-secondary img {
+  filter: brightness(0) invert(1);
+}
+
+

@@ -96,26 +96,28 @@
   <div class="d-flex justify-content-between align-items-center">
     <div>
       <h1 class="page-title">{{ stock.name }} ({{ stock.code }})</h1>
-      <p class="text-muted mb-0 mt-2">Produits présents: {{ stock.items|length }}</p>
+      <p class="text-muted mb-0 mt-2">{{ t('Produits présents:') }} {{ stock.items|length }}</p>
     </div>
+    {% if can_edit_stocks_products() and not is_readonly_stocks_products() and current_user.user_type != 'technicien' %}
     <a href="{{ url_for('create_inventory', stock_id=stock.id) }}" class="btn btn-info" title="Inventaire">📋 Inventaire</a>
+    {% endif %}
   </div>
 </div>
 
-<h4>Produits</h4>
+<h4>{{ t('Produits') }}</h4>
 {% if products_in_stock %}
 <div class="table-responsive mt-3">
   <table class="table table-hover" style="font-size: 0.875rem;">
     <thead class="table-light">
     <tr>
-        <th>Nom</th>
-        <th>Code</th>
-        <th>Code emplacement</th>
-        <th>Prix</th>
-        <th>Fournisseur</th>
-        <th>Stock min.</th>
-        <th class="text-center fw-bold">Quantité</th>
-        <th class="text-center">Actions</th>
+        <th>{{ t('Nom') }}</th>
+        <th>{{ t('Code') }}</th>
+        <th>{{ t('Code emplacement') }}</th>
+        <th>{{ t('Prix') }}</th>
+        <th>{{ t('Fournisseur') }}</th>
+        <th>{{ t('Stock min.') }}</th>
+        <th class="text-center fw-bold">{{ t('Quantité actuelle') }}</th>
+        <th class="text-center">{{ t('Actions') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -141,10 +143,10 @@
         </td>
       {% if current_user.user_type == 'admin' %}
         <td class="text-center" style="white-space: nowrap;">
-          <form method="post" class="d-inline" onsubmit="return confirm('Supprimer le produit du stock ?');">
+          <form method="post" class="d-inline" onsubmit="return confirm('{{ t('Supprimer le produit du stock ?') }}');">
             <input type="hidden" name="product_id" value="{{ product.id }}" />
           <input type="hidden" name="action" value="delete" />
-            <button type="submit" class="btn btn-outline-danger" style="padding: 0.125rem 0.25rem; font-size: 0.75rem; line-height: 1.2;" title="Supprimer du stock">🗑️</button>
+            <button type="submit" class="btn btn-outline-danger" style="padding: 0.125rem 0.25rem; font-size: 0.75rem; line-height: 1.2;" title="{{ t('Supprimer du stock') }}"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="{{ t('Supprimer') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
         </form>
       </td>
       {% else %}
@@ -156,7 +158,7 @@
 </table>
 </div>
 {% else %}
-<p class="text-muted">Aucun produit dans ce stock.</p>
+<p class="text-muted">{{ t('Aucun produit dans ce stock') }}.</p>
 {% endif %}
 {% endblock %}
 

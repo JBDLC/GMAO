@@ -18,19 +18,35 @@
       {% set status = machine_status.get(node.id) %}
       <span class="machine-status {% if status == 'danger' %}danger{% elif status == 'warning' %}warning{% endif %}"></span>
       
-      <div class="machine-info">
+        <div class="machine-info">
         <a href="{{ url_for('machine_detail', machine_id=node.id) }}" class="machine-name">
           {{ node.name }} <span class="machine-code">({{ node.code }})</span>
         </a>
-        <div class="machine-badges">
-          {% if node.is_root() and node.counters %}
-            {% for counter in node.counters %}
-            <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
-            {% endfor %}
-          {% elif node.hour_counter_enabled %}
-          <span class="badge-counter">{{ "%.1f"|format(node.hours) }} {{ node.counter_unit or 'h' }}</span>
-          {% endif %}
+        {% if (node.is_root() and node.counters) or node.hour_counter_enabled %}
+        <div class="machine-counters-info" style="position: relative; display: inline-block; margin-left: 8px;">
+          {% set counters_count = node.counters|length if node.is_root() and node.counters else 1 %}
+          <button type="button" class="btn-counter-badge" data-machine-id="{{ node.id }}" title="{{ t('Voir les compteurs') }}">
+            {{ counters_count }} {% if counters_count > 1 %}{{ t('compteurs') }}{% else %}{{ t('compteur') }}{% endif %}
+          </button>
+          <div class="counter-tooltip" id="counter-tooltip-{{ node.id }}" style="display: none;">
+            <div class="counter-tooltip-content">
+              {% if node.is_root() and node.counters %}
+                {% for counter in node.counters %}
+                <div class="counter-tooltip-item">
+                  <span class="counter-name">{{ counter.name }}:</span>
+                  <span class="counter-value">{{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+                </div>
+                {% endfor %}
+              {% elif node.hour_counter_enabled %}
+              <div class="counter-tooltip-item">
+                <span class="counter-name">{{ t('Compteur machine') }}:</span>
+                <span class="counter-value">{{ "%.1f"|format(node.hours) }} {{ node.counter_unit or 'h' }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
         </div>
+        {% endif %}
       </div>
       
       <div class="machine-actions">
@@ -38,23 +54,23 @@
           type="button" 
           class="btn-action follow-btn {% if is_followed %}followed{% endif %}" 
           data-machine-id="{{ node.id }}"
-          title="{% if is_followed %}Ne plus suivre{% else %}Suivre cette machine{% endif %}">
-          {% if is_followed %}★{% else %}☆{% endif %}
+          title="{% if is_followed %}{{ t('Ne plus suivre') }}{% else %}{{ t('Suivre cette machine') }}{% endif %}">
+          {% if is_followed %}
+            <img src="{{ url_for('static', filename='icons/star.svg') }}" alt="{{ t('Suivre cette machine') }}" style="width: 16px; height: 16px; display: inline-block;">
+          {% else %}
+            <img src="{{ url_for('static', filename='icons/star-outline.svg') }}" alt="{{ t('Suivre cette machine') }}" style="width: 16px; height: 16px; display: inline-block;">
+          {% endif %}
         </button>
         {% if level == 0 and current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(node) %}
-        <a href="{{ url_for('counter_report', machine_id=node.id) }}" class="btn-action" title="Relevé compteur">📊</a>
-        {% endif %}
-        {% if current_user.user_type == 'admin' %}
-        <a href="{{ url_for('edit_machine', machine_id=node.id) }}" class="btn-action" title="Modifier">✏️</a>
-        <form method="post" action="{{ url_for('delete_machine', machine_id=node.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.');">
-          <button type="submit" class="btn-action" title="Supprimer">🗑️</button>
-        </form>
+        <a href="{{ url_for('counter_report', machine_id=node.id) }}" class="btn-action" title="{{ t('Relevé compteurs') }}">
+          <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="{{ t('Relevé') }}" style="width: 16px; height: 16px;">
+        </a>
         {% endif %}
       </div>
     </div>
     
     {% if has_children %}
-    <div class="machine-children {% if is_followed %}expanded{% else %}collapsed{% endif %}" id="children-{{ node.id }}">
+    <div class="machine-children collapsed" id="children-{{ node.id }}">
       {% for child in node.children|sort(attribute='name') %}
         {{ render_machine_node(child, child.depth(), color_index) }}
       {% endfor %}
@@ -182,6 +198,84 @@
     font-weight: 500;
   }
   
+  .btn-counter-badge {
+    background-color: rgba(26, 59, 80, 0.1);
+    color: #1a3b50;
+    border: 1px solid rgba(26, 59, 80, 0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-counter-badge:hover {
+    background-color: rgba(26, 59, 80, 0.2);
+    border-color: rgba(26, 59, 80, 0.5);
+  }
+  
+  .counter-tooltip {
+    position: fixed;
+    z-index: 99999;
+    min-width: 200px;
+    pointer-events: none;
+  }
+  
+  .counter-tooltip-content {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 10px;
+    pointer-events: auto;
+  }
+  
+  .counter-tooltip-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  
+  .counter-tooltip-item:last-child {
+    border-bottom: none;
+  }
+  
+  .counter-tooltip-item .counter-name {
+    font-weight: 500;
+    color: #1a3b50;
+  }
+  
+  .counter-tooltip-item .counter-value {
+    color: #6c757d;
+    font-weight: 600;
+  }
+  
+  /* Flèche du tooltip */
+  .counter-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: white;
+    pointer-events: none;
+  }
+  
+  .counter-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+    border-top-color: #dee2e6;
+    margin-top: -1px;
+    pointer-events: none;
+  }
+  
   .machine-actions {
     display: flex;
     gap: 6px;
@@ -211,6 +305,10 @@
     border-color: #1a3b50;
   }
   
+  .btn-action:hover img {
+    filter: brightness(0) invert(1);
+  }
+  
   .btn-action.follow-btn {
     border-color: #ffc107;
     color: #ffc107;
@@ -222,10 +320,18 @@
     border-color: #ffc107;
   }
   
+  .btn-action.follow-btn.followed img {
+    filter: brightness(0);
+  }
+  
   .btn-action.follow-btn:hover {
     background: #ffc107;
     color: #000;
     border-color: #ffc107;
+  }
+  
+  .btn-action.follow-btn:hover img {
+    filter: brightness(0);
   }
   
   .machine-children {
@@ -796,6 +902,17 @@
     color: white;
   }
   
+  [class*="machine-color-"] .btn-counter-badge {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  [class*="machine-color-"] .btn-counter-badge:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+  
   [class*="machine-color-"].tree-level-0 .btn-action,
   [class*="machine-color-"].tree-level-1 .btn-action,
   [class*="machine-color-"].tree-level-2 .btn-action,
@@ -814,6 +931,11 @@
     background: rgba(255, 255, 255, 0.2);
     color: white;
     border-color: rgba(255, 255, 255, 0.5);
+  }
+  
+  [class*="machine-color-"] .btn-action img,
+  [class*="machine-color-"] .btn-action:hover img {
+    filter: brightness(0) invert(1);
   }
   
   [class*="machine-color-"].tree-level-0 .machine-status,
@@ -912,7 +1034,11 @@
   
   .page-header {
     margin-top: 2rem;
-    margin-bottom: 3.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .actions-row {
+    margin-top: 0.5rem !important;
   }
   
   .page-title {
@@ -1045,14 +1171,21 @@
     }
     
     .actions-row {
-      flex-direction: column;
-      align-items: flex-start !important;
-      gap: 0.75rem;
+      flex-direction: row;
+      align-items: center !important;
+      gap: 0.5rem;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+    
+    .left-actions {
+      flex-shrink: 0;
+      gap: 0.5rem;
     }
     
     .header-actions {
       gap: 6px;
-      width: 100%;
+      flex-shrink: 0;
       justify-content: flex-end;
     }
     
@@ -1106,18 +1239,18 @@
   
   <div class="d-flex justify-content-between align-items-center mb-3 actions-row">
     <div class="left-actions">
-      <a href="{{ url_for('maintenance_manage') }}" class="maintenance-retard-btn" title="Gestion des maintenances">
-        <img src="{{ url_for('static', filename='icons/maintenance-retard.svg') }}" alt="Maintenances en retard" style="width: 36px; height: 36px;">
+      <a href="{{ url_for('maintenance_manage') }}" class="maintenance-retard-btn" title="{{ t('Gestion des maintenances') }}">
+        <img src="{{ url_for('static', filename='icons/maintenance-retard.svg') }}" alt="{{ t('Maintenances en retard') }}" style="width: 36px; height: 36px;">
         {% if followed_overdue_count > 0 %}
         <span class="maintenance-badge">{{ followed_overdue_count }}</span>
         {% endif %}
       </a>
-      <a href="{{ url_for('counter_report') }}" class="counter-btn" title="Relevé de compteur">
-        <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé de compteur" style="width: 36px; height: 36px;">
+      <a href="{{ url_for('counter_report') }}" class="counter-btn" title="{{ t('Relevé compteurs') }}">
+        <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="{{ t('Relevé compteurs') }}" style="width: 36px; height: 36px;">
       </a>
     </div>
     <div class="header-actions">
-      <a href="{{ url_for('new_machine') }}" class="add-machine-btn" title="Ajouter une machine">
+      <a href="{{ url_for('new_machine') }}" class="add-machine-btn" title="{{ t('Ajouter une machine') }}">
         +
       </a>
       <button type="button" class="toggle-all-btn" id="toggle-all-machines" onclick="toggleAllMachines()" title="{{ t('Afficher toutes les machines') }}">
@@ -1151,15 +1284,31 @@
             <a href="{{ url_for('machine_detail', machine_id=root.id) }}" class="machine-name">
               {{ root.name }} <span class="machine-code">({{ root.code }})</span>
             </a>
-            <div class="machine-badges">
-              {% if root.is_root() and root.counters %}
-                {% for counter in root.counters %}
-                <span class="badge-counter">{{ counter.name }}: {{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
-                {% endfor %}
-              {% elif root.hour_counter_enabled %}
-              <span class="badge-counter">{{ "%.1f"|format(root.hours) }} {{ root.counter_unit or 'h' }}</span>
-              {% endif %}
+            {% if (root.is_root() and root.counters) or root.hour_counter_enabled %}
+            <div class="machine-counters-info" style="position: relative; display: inline-block; margin-left: 8px;">
+              {% set counters_count = root.counters|length if root.is_root() and root.counters else 1 %}
+              <button type="button" class="btn-counter-badge" data-machine-id="{{ root.id }}" title="{{ t('Voir les compteurs') }}">
+                {{ counters_count }} {% if counters_count > 1 %}{{ t('compteurs') }}{% else %}{{ t('compteur') }}{% endif %}
+              </button>
+              <div class="counter-tooltip" id="counter-tooltip-{{ root.id }}" style="display: none;">
+                <div class="counter-tooltip-content">
+                  {% if root.is_root() and root.counters %}
+                    {% for counter in root.counters %}
+                    <div class="counter-tooltip-item">
+                      <span class="counter-name">{{ counter.name }}:</span>
+                      <span class="counter-value">{{ "%.1f"|format(counter.value) }} {{ counter.unit or 'h' }}</span>
+                    </div>
+                    {% endfor %}
+                  {% elif root.hour_counter_enabled %}
+                  <div class="counter-tooltip-item">
+                    <span class="counter-name">{{ t('Compteur machine') }}:</span>
+                    <span class="counter-value">{{ "%.1f"|format(root.hours) }} {{ root.counter_unit or 'h' }}</span>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
             </div>
+            {% endif %}
           </div>
           
           <div class="machine-actions">
@@ -1168,22 +1317,22 @@
               class="btn-action follow-btn {% if root.id in followed_machine_ids %}followed{% endif %}" 
               data-machine-id="{{ root.id }}"
               title="{% if root.id in followed_machine_ids %}Ne plus suivre{% else %}Suivre cette machine{% endif %}">
-              {% if root.id in followed_machine_ids %}★{% else %}☆{% endif %}
+              {% if root.id in followed_machine_ids %}
+                <img src="{{ url_for('static', filename='icons/star.svg') }}" alt="Suivi" style="width: 16px; height: 16px; display: inline-block;">
+              {% else %}
+                <img src="{{ url_for('static', filename='icons/star-outline.svg') }}" alt="Non suivi" style="width: 16px; height: 16px; display: inline-block;">
+              {% endif %}
             </button>
             {% if current_user.user_type in ['admin', 'technicien'] and has_counter_in_tree(root) %}
-            <a href="{{ url_for('counter_report', machine_id=root.id) }}" class="btn-action" title="Relevé compteur">📊</a>
-            {% endif %}
-            {% if current_user.user_type == 'admin' %}
-            <a href="{{ url_for('edit_machine', machine_id=root.id) }}" class="btn-action" title="Modifier">✏️</a>
-            <form method="post" action="{{ url_for('delete_machine', machine_id=root.id) }}" class="d-inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer cette machine ? Cette action est irréversible.');">
-              <button type="submit" class="btn-action" title="Supprimer">🗑️</button>
-            </form>
+            <a href="{{ url_for('counter_report', machine_id=root.id) }}" class="btn-action" title="{{ t('Relevé compteurs') }}">
+              <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé" style="width: 16px; height: 16px;">
+            </a>
             {% endif %}
           </div>
         </div>
         
         {% if root_has_children %}
-        <div class="machine-children expanded" id="children-{{ root.id }}">
+        <div class="machine-children collapsed" id="children-{{ root.id }}">
           {% for child in root.children|sort(attribute='name') %}
             {{ render_machine_node(child, child.depth(), color_index) }}
           {% endfor %}
@@ -1201,24 +1350,24 @@
   
   <div class="d-flex justify-content-between align-items-center mb-3 actions-row">
     <div class="left-actions">
-      <a href="{{ url_for('maintenance_manage') }}" class="maintenance-retard-btn" title="Gestion des maintenances">
-        <img src="{{ url_for('static', filename='icons/maintenance-retard.svg') }}" alt="Maintenances en retard" style="width: 36px; height: 36px;">
+      <a href="{{ url_for('maintenance_manage') }}" class="maintenance-retard-btn" title="{{ t('Gestion des maintenances') }}">
+        <img src="{{ url_for('static', filename='icons/maintenance-retard.svg') }}" alt="{{ t('Maintenances en retard') }}" style="width: 36px; height: 36px;">
         {% if followed_overdue_count > 0 %}
         <span class="maintenance-badge">{{ followed_overdue_count }}</span>
         {% endif %}
       </a>
-      <a href="{{ url_for('counter_report') }}" class="counter-btn" title="Relevé de compteur">
-        <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé de compteur" style="width: 36px; height: 36px;">
+      <a href="{{ url_for('counter_report') }}" class="counter-btn" title="{{ t('Relevé compteurs') }}">
+        <img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="{{ t('Relevé compteurs') }}" style="width: 36px; height: 36px;">
       </a>
     </div>
     <div class="header-actions">
-      <a href="{{ url_for('new_machine') }}" class="add-machine-btn" title="Ajouter une machine">
+      <a href="{{ url_for('new_machine') }}" class="add-machine-btn" title="{{ t('Ajouter une machine') }}">
         +
       </a>
     </div>
   </div>
   
-  <p class="text-muted">Aucune machine suivie. Utilisez l'étoile (☆) sur la page Machines pour suivre vos machines favorites.</p>
+  <p class="text-muted">{{ t('Aucune machine suivie. Utilisez l\'étoile sur la page Machines pour suivre vos machines favorites.') }}</p>
 </div>
 {% endif %}
 
@@ -1228,95 +1377,79 @@
     <h1 class="page-title">{{ t('Tableau de bord') }}</h1>
   </div>
   
-  <div class="dashboard-controls card mb-4">
+  <div class="dashboard-card card">
     <div class="card-body">
-      <div class="row g-3">
-        <div class="col-md-3">
-          <label class="form-label">Période</label>
-          <select class="form-select" id="dashboard-period">
-            <option value="semaine">Semaine</option>
-            <option value="mois">Mois</option>
-            <option value="annee">Année</option>
-            <option value="depuis_le_debut" selected>Depuis le début</option>
-          </select>
-        </div>
-        <div class="col-md-5">
-          <label class="form-label">Machines</label>
-          <select class="form-select" id="dashboard-machines" multiple size="5">
-            {% set first_machine = true %}
-            {% for root in followed_machines_data %}
-              {% for node, level in build_machine_tree(root.root_machine) %}
-                {% if node.id in followed_machine_ids %}
-                <option value="{{ node.id }}" {% if first_machine %}selected{% set first_machine = false %}{% endif %}>
-                  {{ '&nbsp;&nbsp;'|safe * level }}{{ node.name }} ({{ node.code }})
-                </option>
-                {% endif %}
+      <!-- Contrôles condensés -->
+      <div class="dashboard-controls-compact">
+        <div class="row g-3 mb-3">
+          <div class="col-md-2">
+            <label class="form-label">{{ t('Vue') }}</label>
+            <select class="form-select" id="dashboard-view">
+              <option value="table">{{ t('Tableau') }}</option>
+              <option value="chart">{{ t('Graphique') }}</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ t('Date de début') }}</label>
+            <input type="date" class="form-control" id="dashboard-date-start">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ t('Date de fin') }}</label>
+            <input type="date" class="form-control" id="dashboard-date-end">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ t('Machines') }}</label>
+            <select class="form-select" id="dashboard-machines" multiple size="3">
+              {% set first_machine = true %}
+              {% for root in followed_machines_data %}
+                {% for node, level in build_machine_tree(root.root_machine) %}
+                  {% if node.id in followed_machine_ids %}
+                  <option value="{{ node.id }}" {% if first_machine %}selected{% set first_machine = false %}{% endif %}>
+                    {{ '&nbsp;&nbsp;'|safe * level }}{{ node.name }} ({{ node.code }})
+                  </option>
+                  {% endif %}
+                {% endfor %}
               {% endfor %}
-            {% endfor %}
-          </select>
-          <small class="form-text text-muted">Maintenez Ctrl/Cmd pour sélectionner plusieurs machines</small>
+            </select>
+            <small class="form-text text-muted">{{ t('Ctrl/Cmd pour sélectionner plusieurs') }}</small>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">{{ t('Métriques') }}</label>
+            <select class="form-select" id="dashboard-metrics" multiple size="7">
+              <option value="maintenances_preventives" selected>{{ t('Maintenances préventives') }}</option>
+              <option value="maintenances_curatives" selected>{{ t('Maintenances curatives') }}</option>
+              <option value="cout_produits" selected>{{ t('Coût des produits') }}</option>
+              <option value="checklists" selected>{{ t('Checklists') }}</option>
+              <option value="maintenances_retard">{{ t('Maintenances en retard') }}</option>
+              <option value="maintenances_a_heure">{{ t('Maintenances à l\'heure') }}</option>
+              <option value="mises_a_jour_compteur" selected>{{ t('Mises à jour compteur') }}</option>
+            </select>
+            <small class="form-text text-muted">{{ t('Ctrl/Cmd pour sélectionner plusieurs') }}</small>
+          </div>
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Métriques</label>
-          <div class="form-check">
-            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_preventives" id="metric-preventive" checked>
-            <label class="form-check-label" for="metric-preventive">Maintenances préventives</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_curatives" id="metric-corrective" checked>
-            <label class="form-check-label" for="metric-corrective">Maintenances curatives</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input metric-checkbox" type="checkbox" value="cout_produits" id="metric-cost" checked>
-            <label class="form-check-label" for="metric-cost">Coût des produits</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input metric-checkbox" type="checkbox" value="checklists" id="metric-checklist" checked>
-            <label class="form-check-label" for="metric-checklist">Checklists</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_retard" id="metric-late">
-            <label class="form-check-label" for="metric-late">Maintenances en retard</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input metric-checkbox" type="checkbox" value="maintenances_a_heure" id="metric-ontime">
-            <label class="form-check-label" for="metric-ontime">Maintenances à l'heure</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input metric-checkbox" type="checkbox" value="mises_a_jour_compteur" id="metric-counter" checked>
-            <label class="form-check-label" for="metric-counter">Mises à jour compteur</label>
+        <div class="row">
+          <div class="col-12">
+            <button type="button" class="btn btn-primary-fms" id="dashboard-update">{{ t('Actualiser') }}</button>
           </div>
         </div>
       </div>
-      <div class="row mt-3">
-        <div class="col-12">
-          <button type="button" class="btn btn-primary-fms" id="dashboard-update">Actualiser</button>
+      
+      <!-- Zone de résultats (tableau ou graphique) -->
+      <div class="dashboard-content mt-4">
+        <div id="dashboard-loading" class="text-center" style="display: none;">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Chargement...</span>
+          </div>
+        </div>
+        
+        <!-- Conteneur pour le tableau -->
+        <div id="dashboard-table-container" style="display: none;"></div>
+        
+        <!-- Conteneur pour le graphique -->
+        <div id="dashboard-chart-container" style="display: none;">
+          <canvas id="dashboard-chart"></canvas>
         </div>
       </div>
-    </div>
-  </div>
-  
-  <div class="dashboard-results card">
-    <div class="card-body">
-      <div id="dashboard-loading" class="text-center" style="display: none;">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Chargement...</span>
-        </div>
-      </div>
-      <div id="dashboard-table-container"></div>
-    </div>
-  </div>
-  
-  <!-- Graphique en courbes -->
-  <div class="dashboard-chart card mt-4">
-    <div class="card-body">
-      <h5 class="card-title mb-3">Visualisation en courbes</h5>
-      <div id="dashboard-chart-loading" class="text-center" style="display: none;">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Chargement...</span>
-        </div>
-      </div>
-      <canvas id="dashboard-chart"></canvas>
     </div>
   </div>
 </div>
@@ -1326,23 +1459,39 @@
   margin-top: 3rem;
 }
 
-.dashboard-controls .form-select[multiple] {
+.dashboard-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-controls-compact .form-select[multiple] {
+  min-height: 80px;
+  font-size: 0.875rem;
+}
+
+.dashboard-controls-compact .form-select[multiple]#dashboard-metrics {
   min-height: 120px;
 }
 
-.dashboard-results table {
-  width: 100%;
-  border-collapse: collapse;
+.dashboard-content {
+  min-height: 300px;
 }
 
-.dashboard-results th,
-.dashboard-results td {
+#dashboard-table-container table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+#dashboard-table-container th,
+#dashboard-table-container td {
   padding: 0.75rem;
   text-align: left;
   border-bottom: 1px solid #dee2e6;
 }
 
-.dashboard-results th {
+#dashboard-table-container th {
   background-color: #1a3b50;
   color: white;
   font-weight: 600;
@@ -1351,42 +1500,43 @@
   z-index: 10;
 }
 
-.dashboard-results tr:hover {
+#dashboard-table-container tr:hover {
   background-color: #f8f9fa;
 }
 
-.dashboard-results .metric-value {
+#dashboard-table-container .metric-value {
   font-weight: 600;
   color: #1a3b50;
 }
 
-.dashboard-results .metric-cost {
+#dashboard-table-container .metric-cost {
   color: #28a745;
 }
 
-.dashboard-chart {
+#dashboard-chart-container {
   min-height: 400px;
+  padding: 1rem 0;
 }
 
-.dashboard-chart canvas {
+#dashboard-chart-container canvas {
   max-height: 500px;
 }
 
 @media (max-width: 768px) {
-  .dashboard-controls .row > div {
+  .dashboard-controls-compact .row > div {
     margin-bottom: 1rem;
   }
   
-  .dashboard-results {
+  #dashboard-table-container {
     overflow-x: auto;
   }
   
-  .dashboard-results table {
+  #dashboard-table-container table {
     font-size: 0.875rem;
   }
   
-  .dashboard-results th,
-  .dashboard-results td {
+  #dashboard-table-container th,
+  #dashboard-table-container td {
     padding: 0.5rem;
   }
 }
@@ -1495,10 +1645,14 @@ function toggleMachine(button, machineId) {
     childrenDiv.classList.remove('collapsed');
     childrenDiv.classList.add('expanded');
     button.textContent = '−';
+    // Sauvegarder l'état dans localStorage
+    localStorage.setItem('machine-' + machineId + '-expanded', 'true');
   } else {
     childrenDiv.classList.remove('expanded');
     childrenDiv.classList.add('collapsed');
     button.textContent = '+';
+    // Sauvegarder l'état dans localStorage
+    localStorage.setItem('machine-' + machineId + '-expanded', 'false');
   }
 }
 
@@ -1510,6 +1664,34 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('Total machines dans le HTML:', allMachines.length);
   console.log('Machines non suivies dans le HTML:', allNotFollowedMachines.length);
   console.log('=======================');
+  
+  // Restaurer l'état de dépliage/repliage depuis localStorage
+  function restoreMachineStates() {
+    document.querySelectorAll('.machine-children').forEach(childrenDiv => {
+      const machineId = childrenDiv.id.replace('children-', '');
+      const savedState = localStorage.getItem('machine-' + machineId + '-expanded');
+      
+      if (savedState === 'true') {
+        childrenDiv.classList.remove('collapsed');
+        childrenDiv.classList.add('expanded');
+        const button = document.querySelector('.machine-toggle[data-target="' + machineId + '"], .machine-toggle[data-machine-id="' + machineId + '"]');
+        if (button && !button.classList.contains('no-children')) {
+          button.textContent = '−';
+        }
+      } else if (savedState === 'false') {
+        childrenDiv.classList.remove('expanded');
+        childrenDiv.classList.add('collapsed');
+        const button = document.querySelector('.machine-toggle[data-target="' + machineId + '"], .machine-toggle[data-machine-id="' + machineId + '"]');
+        if (button && !button.classList.contains('no-children')) {
+          button.textContent = '+';
+        }
+      }
+      // Si pas d'état sauvegardé, on garde l'état initial du HTML
+    });
+  }
+  
+  // Restaurer les états avant d'attacher les listeners
+  restoreMachineStates();
   
   // Attacher les listeners aux boutons toggle
   function attachToggleListeners() {
@@ -1548,11 +1730,11 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(data => {
         if (data.success) {
           if (data.is_followed) {
-            this.innerHTML = '★';
+            this.innerHTML = '<img src="/static/icons/star.svg" alt="Suivi" style="width: 16px; height: 16px; display: inline-block;">';
             this.classList.add('followed');
             this.title = 'Ne plus suivre';
           } else {
-            this.innerHTML = '☆';
+            this.innerHTML = '<img src="/static/icons/star-outline.svg" alt="Non suivi" style="width: 16px; height: 16px; display: inline-block;">';
             this.classList.remove('followed');
             this.title = 'Suivre cette machine';
           }
@@ -1575,158 +1757,212 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Tableau de bord
 document.addEventListener('DOMContentLoaded', function() {
+  // Traductions pour le JavaScript
+  const translations = {
+    'Veuillez sélectionner au moins une machine.': '{{ t('Veuillez sélectionner au moins une machine.') }}',
+    'Veuillez sélectionner au moins une métrique.': '{{ t('Veuillez sélectionner au moins une métrique.') }}',
+    'Aucune donnée disponible pour les critères sélectionnés.': '{{ t('Aucune donnée disponible pour les critères sélectionnés.') }}',
+    'Erreur lors du chargement des données :': '{{ t('Erreur lors du chargement des données :') }}',
+    'Machine': '{{ t('Machine') }}',
+    'Maintenances préventives': '{{ t('Maintenances préventives') }}',
+    'Maintenances curatives': '{{ t('Maintenances curatives') }}',
+    'Coût produits (€)': '{{ t('Coût produits (€)') }}',
+    'Checklists': '{{ t('Checklists') }}',
+    'En retard': '{{ t('En retard') }}',
+    'À l\'heure': '{{ t('À l\'heure') }}',
+    'Mises à jour compteur': '{{ t('Mises à jour compteur') }}',
+    'Coût': '{{ t('Coût des produits') }}'
+  };
+  
   const updateBtn = document.getElementById('dashboard-update');
-  const periodSelect = document.getElementById('dashboard-period');
+  const viewSelect = document.getElementById('dashboard-view');
+  const dateStartInput = document.getElementById('dashboard-date-start');
+  const dateEndInput = document.getElementById('dashboard-date-end');
   const machinesSelect = document.getElementById('dashboard-machines');
-  const metricCheckboxes = document.querySelectorAll('.metric-checkbox');
+  const metricsSelect = document.getElementById('dashboard-metrics');
   const loadingDiv = document.getElementById('dashboard-loading');
-  const chartLoadingDiv = document.getElementById('dashboard-chart-loading');
   const tableContainer = document.getElementById('dashboard-table-container');
+  const chartContainer = document.getElementById('dashboard-chart-container');
   const chartCanvas = document.getElementById('dashboard-chart');
+  
+  // Initialiser les dates par défaut (depuis le début jusqu'à aujourd'hui)
+  const today = new Date().toISOString().split('T')[0];
+  dateEndInput.value = today;
+  // Laisser date de début vide pour "depuis le début"
+  
+  // Gérer le changement de vue
+  viewSelect.addEventListener('change', function() {
+    const view = this.value;
+    if (view === 'table') {
+      tableContainer.style.display = 'block';
+      chartContainer.style.display = 'none';
+    } else {
+      tableContainer.style.display = 'none';
+      chartContainer.style.display = 'block';
+    }
+  });
+  
+  // Initialiser l'affichage selon la vue par défaut
+  if (viewSelect.value === 'table') {
+    tableContainer.style.display = 'block';
+    chartContainer.style.display = 'none';
+  } else {
+    tableContainer.style.display = 'none';
+    chartContainer.style.display = 'block';
+  }
   
   function updateDashboard() {
     // Récupérer les machines sélectionnées
     const selectedMachines = Array.from(machinesSelect.selectedOptions).map(opt => opt.value);
     if (selectedMachines.length === 0) {
-      tableContainer.innerHTML = '<p class="text-muted">Veuillez sélectionner au moins une machine.</p>';
+      tableContainer.innerHTML = '<p class="text-muted">' + translations['Veuillez sélectionner au moins une machine.'] + '</p>';
       return;
     }
     
     // Récupérer les métriques sélectionnées
-    const selectedMetrics = Array.from(metricCheckboxes)
-      .filter(cb => cb.checked)
-      .map(cb => cb.value);
+    const selectedMetrics = Array.from(metricsSelect.selectedOptions).map(opt => opt.value);
     
     if (selectedMetrics.length === 0) {
-      tableContainer.innerHTML = '<p class="text-muted">Veuillez sélectionner au moins une métrique.</p>';
+      tableContainer.innerHTML = '<p class="text-muted">' + translations['Veuillez sélectionner au moins une métrique.'] + '</p>';
       return;
     }
     
+    // Récupérer les dates
+    const dateStart = dateStartInput.value || '';
+    const dateEnd = dateEndInput.value || '';
+    
     // Afficher le chargement
     loadingDiv.style.display = 'block';
-    chartLoadingDiv.style.display = 'block';
     tableContainer.innerHTML = '';
-    
-    // Construire l'URL de l'API
-    const period = periodSelect.value;
-    const machineIds = selectedMachines.join(',');
-    const metrics = selectedMetrics.join(',');
-    const url = `/api/dashboard?period=${encodeURIComponent(period)}&machine_ids=${encodeURIComponent(machineIds)}&metrics=${encodeURIComponent(metrics)}`;
+    chartContainer.innerHTML = '<canvas id="dashboard-chart"></canvas>';
+    const currentChartCanvas = document.getElementById('dashboard-chart');
     
     const metricLabels = {
-      'maintenances_preventives': 'Maintenances préventives',
-      'maintenances_curatives': 'Maintenances curatives',
-      'cout_produits': 'Coût produits (€)',
-      'checklists': 'Checklists',
-      'maintenances_retard': 'En retard',
-      'maintenances_a_heure': 'À l\'heure',
-      'mises_a_jour_compteur': 'Mises à jour compteur'
+      'maintenances_preventives': translations['Maintenances préventives'],
+      'maintenances_curatives': translations['Maintenances curatives'],
+      'cout_produits': translations['Coût produits (€)'],
+      'checklists': translations['Checklists'],
+      'maintenances_retard': translations['En retard'],
+      'maintenances_a_heure': translations['À l\'heure'],
+      'mises_a_jour_compteur': translations['Mises à jour compteur']
     };
     
-    // Appel API
-    fetch(url)
-      .then(response => response.json())
-      .then(data => {
-        loadingDiv.style.display = 'none';
-        
-        if (!data.success || !data.data || data.data.length === 0) {
-          tableContainer.innerHTML = '<p class="text-muted">Aucune donnée disponible pour les critères sélectionnés.</p>';
-          updateChart(null, null, null, null);
-          return;
-        }
-        
-        // Créer le tableau
-        const table = document.createElement('table');
-        table.className = 'table table-striped';
-        
-        // En-têtes
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-        const machineHeader = document.createElement('th');
-        machineHeader.textContent = 'Machine';
-        headerRow.appendChild(machineHeader);
-        
-        selectedMetrics.forEach(metric => {
-          const th = document.createElement('th');
-          th.textContent = metricLabels[metric] || metric;
-          headerRow.appendChild(th);
-        });
-        
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-        
-        // Corps du tableau
-        const tbody = document.createElement('tbody');
-        data.data.forEach(machineData => {
-          const row = document.createElement('tr');
+    const currentView = viewSelect.value;
+    const machineIds = selectedMachines.join(',');
+    const metrics = selectedMetrics.join(',');
+    
+    if (currentView === 'table') {
+      // Afficher le tableau
+      const url = `/api/dashboard?date_start=${encodeURIComponent(dateStart)}&date_end=${encodeURIComponent(dateEnd)}&machine_ids=${encodeURIComponent(machineIds)}&metrics=${encodeURIComponent(metrics)}`;
+      
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          loadingDiv.style.display = 'none';
           
-          // Nom de la machine
-          const machineCell = document.createElement('td');
-          machineCell.innerHTML = `<strong>${machineData.machine_name}</strong><br><small class="text-muted">${machineData.machine_code}</small>`;
-          row.appendChild(machineCell);
+          if (!data.success || !data.data || data.data.length === 0) {
+            tableContainer.innerHTML = '<p class="text-muted">' + translations['Aucune donnée disponible pour les critères sélectionnés.'] + '</p>';
+            return;
+          }
           
-          // Valeurs des métriques
+          // Créer le tableau
+          const table = document.createElement('table');
+          table.className = 'table table-striped';
+          
+          // En-têtes
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          const machineHeader = document.createElement('th');
+          machineHeader.textContent = translations['Machine'];
+          headerRow.appendChild(machineHeader);
+          
           selectedMetrics.forEach(metric => {
-            const cell = document.createElement('td');
-            const value = machineData.metrics[metric];
-            if (value !== undefined) {
-              if (metric === 'cout_produits') {
-                cell.className = 'metric-value metric-cost';
-                cell.textContent = value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-              } else {
-                cell.className = 'metric-value';
-                cell.textContent = value;
-              }
-            } else {
-              cell.textContent = '-';
-            }
-            row.appendChild(cell);
+            const th = document.createElement('th');
+            th.textContent = metricLabels[metric] || metric;
+            headerRow.appendChild(th);
           });
           
-          tbody.appendChild(row);
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
+          
+          // Corps du tableau
+          const tbody = document.createElement('tbody');
+          data.data.forEach(machineData => {
+            const row = document.createElement('tr');
+            
+            // Nom de la machine
+            const machineCell = document.createElement('td');
+            machineCell.innerHTML = `<strong>${machineData.machine_name}</strong><br><small class="text-muted">${machineData.machine_code}</small>`;
+            row.appendChild(machineCell);
+            
+            // Valeurs des métriques
+            selectedMetrics.forEach(metric => {
+              const cell = document.createElement('td');
+              const value = machineData.metrics[metric];
+              if (value !== undefined) {
+                if (metric === 'cout_produits') {
+                  cell.className = 'metric-value metric-cost';
+                  cell.textContent = value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+                } else {
+                  cell.className = 'metric-value';
+                  cell.textContent = value;
+                }
+              } else {
+                cell.textContent = '-';
+              }
+              row.appendChild(cell);
+            });
+            
+            tbody.appendChild(row);
+          });
+          
+          table.appendChild(tbody);
+          tableContainer.innerHTML = '';
+          tableContainer.appendChild(table);
+        })
+        .catch(error => {
+          loadingDiv.style.display = 'none';
+          tableContainer.innerHTML = '<p class="text-danger">' + translations['Erreur lors du chargement des données :'] + ' ' + error.message + '</p>';
+          console.error('Erreur:', error);
         });
-        
-        table.appendChild(tbody);
-        tableContainer.appendChild(table);
-        
-        // Mettre à jour le graphique avec les données temporelles
-        updateChart(period, selectedMachines, selectedMetrics, metricLabels);
-      })
-      .catch(error => {
-        loadingDiv.style.display = 'none';
-        chartLoadingDiv.style.display = 'none';
-        tableContainer.innerHTML = '<p class="text-danger">Erreur lors du chargement des données : ' + error.message + '</p>';
-        updateChart(null, null, null, null);
-        console.error('Erreur:', error);
-      });
+    } else {
+      // Afficher le graphique
+      updateChart(dateStart, dateEnd, selectedMachines, selectedMetrics, metricLabels);
+    }
   }
   
-  function updateChart(period, selectedMachines, selectedMetrics, metricLabels) {
+  function updateChart(dateStart, dateEnd, selectedMachines, selectedMetrics, metricLabels) {
     // Détruire le graphique existant s'il existe
     if (dashboardChart) {
       dashboardChart.destroy();
       dashboardChart = null;
     }
     
-    if (!period || !selectedMachines || selectedMachines.length === 0 || !selectedMetrics || selectedMetrics.length === 0) {
+    if (!selectedMachines || selectedMachines.length === 0 || !selectedMetrics || selectedMetrics.length === 0) {
+      chartContainer.innerHTML = '<p class="text-muted text-center">' + translations['Aucune donnée disponible pour les critères sélectionnés.'] + '</p>';
       return;
     }
-    
-    // Afficher le chargement du graphique
-    chartLoadingDiv.style.display = 'block';
     
     // Construire l'URL de l'API pour le graphique temporel
     const machineIds = selectedMachines.join(',');
     const metrics = selectedMetrics.join(',');
-    const url = `/api/dashboard-chart?period=${encodeURIComponent(period)}&machine_ids=${encodeURIComponent(machineIds)}&metrics=${encodeURIComponent(metrics)}`;
+    const url = `/api/dashboard-chart?date_start=${encodeURIComponent(dateStart || '')}&date_end=${encodeURIComponent(dateEnd || '')}&machine_ids=${encodeURIComponent(machineIds)}&metrics=${encodeURIComponent(metrics)}`;
     
     // Appel API pour les données temporelles
     fetch(url)
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('HTTP error! status: ' + response.status);
+        }
+        return response.json();
+      })
       .then(data => {
-        chartLoadingDiv.style.display = 'none';
+        loadingDiv.style.display = 'none';
+        console.log('Chart data received:', data);
         
-        if (!data.success || !data.data || data.data.length === 0) {
+        if (!data || !data.success || !data.data || data.data.length === 0) {
+          console.log('No chart data available:', data);
+          chartContainer.innerHTML = '<p class="text-muted text-center">' + translations['Aucune donnée disponible pour les critères sélectionnés.'] + '</p>';
           return;
         }
         
@@ -1747,6 +1983,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         selectedMetrics.forEach((metric, index) => {
           const values = data.data.map(d => {
+            if (!d || !d.metrics) {
+              console.warn('Invalid data point:', d);
+              return 0;
+            }
             const value = d.metrics[metric];
             return value !== undefined ? value : 0;
           });
@@ -1762,7 +2002,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Créer le graphique
-        const ctx = chartCanvas.getContext('2d');
+        const currentChartCanvas = document.getElementById('dashboard-chart');
+        if (!currentChartCanvas) {
+          console.error('Chart canvas not found');
+          return;
+        }
+        
+        const ctx = currentChartCanvas.getContext('2d');
+        if (!ctx) {
+          console.error('Could not get 2d context');
+          return;
+        }
+        
         dashboardChart = new Chart(ctx, {
           type: 'line',
           data: {
@@ -1789,7 +2040,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   label: function(context) {
                     const label = context.dataset.label || '';
                     const value = context.parsed.y;
-                    if (context.dataset.label.includes('Coût')) {
+                    if (context.dataset.label.includes(translations['Coût']) || context.dataset.label.includes('Coût')) {
                       return label + ': ' + value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
                     }
                     return label + ': ' + value;
@@ -1831,8 +2082,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       })
       .catch(error => {
-        chartLoadingDiv.style.display = 'none';
+        loadingDiv.style.display = 'none';
         console.error('Erreur lors du chargement du graphique:', error);
+        chartContainer.innerHTML = '<p class="text-danger text-center">' + translations['Erreur lors du chargement des données :'] + ' ' + error.message + '</p>';
       });
   }
   
@@ -1841,6 +2093,68 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Charger les données au chargement de la page
   updateDashboard();
+  
+  // Gestion des tooltips de compteurs
+  const counterBadges = document.querySelectorAll('.btn-counter-badge');
+  
+  counterBadges.forEach(function(badge) {
+    const machineId = badge.getAttribute('data-machine-id');
+    const tooltip = document.getElementById('counter-tooltip-' + machineId);
+    
+    if (!tooltip) return;
+    
+    // Détecter si on est sur mobile
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    
+    if (isMobile) {
+      // Sur mobile : afficher au clic
+      let isOpen = false;
+      badge.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (isOpen) {
+          tooltip.style.display = 'none';
+          isOpen = false;
+        } else {
+          // Fermer tous les autres tooltips
+          document.querySelectorAll('.counter-tooltip').forEach(function(t) {
+            t.style.display = 'none';
+          });
+          tooltip.style.display = 'block';
+          isOpen = true;
+        }
+      });
+      
+      // Fermer au clic ailleurs
+      document.addEventListener('click', function(e) {
+        if (!badge.contains(e.target) && !tooltip.contains(e.target)) {
+          tooltip.style.display = 'none';
+          isOpen = false;
+        }
+      });
+    } else {
+      // Sur desktop : afficher au survol
+      badge.addEventListener('mouseenter', function() {
+        const rect = badge.getBoundingClientRect();
+        tooltip.style.display = 'block';
+        tooltip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+        tooltip.style.transform = 'translateX(-50%)';
+      });
+      
+      badge.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+      });
+      
+      // Garder le tooltip ouvert si on survole le tooltip lui-même
+      tooltip.addEventListener('mouseenter', function() {
+        tooltip.style.display = 'block';
+      });
+      
+      tooltip.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+      });
+    }
+  });
 });
 </script>
 {% endblock %}

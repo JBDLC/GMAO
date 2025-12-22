@@ -23,7 +23,7 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import CheckConstraint, inspect, text, func
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 from functools import wraps
 
@@ -34,8 +34,11 @@ MAINTENANCE_PHOTOS_FOLDER = BASE_DIR / "uploads" / "maintenance_photos"
 MAINTENANCE_PHOTOS_FOLDER.mkdir(parents=True, exist_ok=True)
 REPORT_PHOTOS_FOLDER = BASE_DIR / "uploads" / "report_photos"
 REPORT_PHOTOS_FOLDER.mkdir(parents=True, exist_ok=True)
+EXCEL_FILES_FOLDER = BASE_DIR / "uploads" / "excel_files"
+EXCEL_FILES_FOLDER.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {'pdf'}
 ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
+ALLOWED_EXCEL_EXTENSIONS = {'xlsx', 'xls'}
 
 app = Flask(__name__)
 
@@ -64,6 +67,124 @@ login_manager.login_view = "splash"
 login_manager.login_message = None
 login_manager.login_message_category = "info"
 
+# Fonctions de permissions (doivent être définies avant le context processor)
+def can_view_params():
+    """Vérifie si l'utilisateur peut voir les paramètres"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "admin"
+
+
+def can_edit_machines():
+    """Vérifie si l'utilisateur peut modifier/supprimer des machines"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "admin"
+
+
+def can_create_checklist():
+    """Vérifie si l'utilisateur peut créer une check list"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin"]
+
+
+def can_create_preventive_template():
+    """Vérifie si l'utilisateur peut créer un modèle de maintenance préventive"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin"]
+
+
+def can_create_corrective_maintenance():
+    """Vérifie si l'utilisateur peut créer une maintenance corrective"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin", "technicien"]
+
+
+def can_delete_machines():
+    """Vérifie si l'utilisateur peut supprimer des machines"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "admin"
+
+
+def can_delete_stocks():
+    """Vérifie si l'utilisateur peut supprimer des stocks"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "admin"
+
+
+def can_delete_products():
+    """Vérifie si l'utilisateur peut supprimer des produits"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "admin"
+
+
+def can_edit_stocks_products():
+    """Vérifie si l'utilisateur peut modifier des stocks/produits"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin", "gestionnaire"]
+
+
+def can_edit_machines_maintenances():
+    """Vérifie si l'utilisateur peut modifier des machines/maintenances"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin", "technicien"]
+
+
+def can_add_documentation():
+    """Vérifie si l'utilisateur peut ajouter de la documentation"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin"]
+
+
+def can_view_documentation():
+    """Vérifie si l'utilisateur peut voir la documentation"""
+    return current_user.is_authenticated
+
+
+def can_access_chat():
+    """Vérifie si l'utilisateur peut accéder au chat"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin", "spectateur", "gestionnaire", "technicien"]
+
+
+def can_access_qrcode():
+    """Vérifie si l'utilisateur peut accéder au QR code"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type in ["admin", "spectateur", "gestionnaire", "technicien"]
+
+
+def is_readonly_machines_maintenances():
+    """Vérifie si l'utilisateur est en mode lecture seule sur machines/maintenances"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "gestionnaire"
+
+
+def is_readonly_stocks_products():
+    """Vérifie si l'utilisateur est en mode lecture seule sur stocks/produits"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "technicien"
+
+
+def is_spectator():
+    """Vérifie si l'utilisateur est un spectateur (lecture seule partout)"""
+    if not current_user.is_authenticated:
+        return False
+    return current_user.user_type == "spectateur"
+
+
 # Context processor pour rendre les traductions disponibles dans tous les templates
 @app.context_processor
 def inject_translations():
@@ -72,7 +193,30 @@ def inject_translations():
     def t(key):
         """Fonction de traduction pour les templates"""
         return get_translation(key, lang)
-    return dict(t=t, current_lang=lang, available_languages=['fr', 'es', 'en'])
+    
+    # Injecter les fonctions de permissions dans les templates
+    return dict(
+        t=t, 
+        current_lang=lang, 
+        available_languages=['fr', 'es', 'en', 'it'],
+        can_view_params=can_view_params,
+        can_edit_machines=can_edit_machines,
+        can_create_checklist=can_create_checklist,
+        can_create_preventive_template=can_create_preventive_template,
+        can_create_corrective_maintenance=can_create_corrective_maintenance,
+        can_delete_machines=can_delete_machines,
+        can_delete_stocks=can_delete_stocks,
+        can_delete_products=can_delete_products,
+        can_edit_stocks_products=can_edit_stocks_products,
+        can_edit_machines_maintenances=can_edit_machines_maintenances,
+        can_add_documentation=can_add_documentation,
+        can_view_documentation=can_view_documentation,
+        can_access_chat=can_access_chat,
+        can_access_qrcode=can_access_qrcode,
+        is_readonly_machines_maintenances=is_readonly_machines_maintenances,
+        is_readonly_stocks_products=is_readonly_stocks_products,
+        is_spectator=is_spectator
+    )
 
 
 @login_manager.user_loader
@@ -123,6 +267,9 @@ def can_edit_maintenance_entry(entry):
     return False
 
 
+# Les fonctions de permissions sont définies au début du fichier (après le context processor)
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -140,11 +287,12 @@ class Machine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     code = db.Column(db.String(50), unique=True, nullable=False)
-    parent_id = db.Column(db.Integer, db.ForeignKey("machine.id"))
+    parent_id = db.Column(db.Integer, db.ForeignKey("machine.id"), index=True)
     hour_counter_enabled = db.Column(db.Boolean, default=False)
     hours = db.Column(db.Float, default=0.0)
     counter_unit = db.Column(db.String(20), nullable=True)  # Unité du compteur (h, cycles, anneaux, etc.)
-    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), nullable=True)  # Stock associé par défaut
+    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), nullable=True, index=True)  # Stock associé par défaut
+    color_index = db.Column(db.Integer, default=0)  # Index de couleur (0-9) pour les machines racines
 
     parent = db.relationship("Machine", remote_side=[id], backref="children")
     stock = db.relationship("Stock")
@@ -166,8 +314,8 @@ class Machine(db.Model):
 class FollowedMachine(db.Model):
     """Machines suivies par les utilisateurs"""
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=dt.datetime.utcnow)
 
     user = db.relationship("User", backref="followed_machines")
@@ -179,7 +327,7 @@ class FollowedMachine(db.Model):
 class Counter(db.Model):
     """Compteur pour les machines racines (peut y en avoir plusieurs)"""
     id = db.Column(db.Integer, primary_key=True)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
     name = db.Column(db.String(120), nullable=False)  # Nom du compteur
     value = db.Column(db.Float, default=0.0)  # Valeur actuelle
     unit = db.Column(db.String(20), nullable=True)  # Unité (h, cycles, anneaux, etc.)
@@ -214,8 +362,8 @@ class StockProduct(db.Model):
     __tablename__ = "stock_product"
 
     id = db.Column(db.Integer, primary_key=True)
-    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False)
+    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False, index=True)
     quantity = db.Column(db.Float, nullable=False, default=0.0)
 
     stock = db.relationship("Stock", back_populates="items")
@@ -231,6 +379,7 @@ class Inventory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    name = db.Column(db.String(200), nullable=True)  # Nom de l'inventaire (généré automatiquement)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
     
     stock = db.relationship("Stock", backref="inventories")
@@ -253,9 +402,9 @@ class InventoryItem(db.Model):
 class Movement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(20), nullable=False)
-    source_stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"))
-    dest_stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"))
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    source_stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), index=True)
+    dest_stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
 
     source_stock = db.relationship("Stock", foreign_keys=[source_stock_id])
     dest_stock = db.relationship("Stock", foreign_keys=[dest_stock_id])
@@ -275,8 +424,8 @@ class MovementItem(db.Model):
 class PreventiveReport(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
-    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True)  # Pour les machines racines avec plusieurs compteurs
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # Pour les machines racines avec plusieurs compteurs
     periodicity = db.Column(db.Integer, nullable=False)
 
     machine = db.relationship("Machine", backref="preventive_reports")
@@ -300,13 +449,13 @@ class PreventiveComponent(db.Model):
 
 class MaintenanceEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
-    report_id = db.Column(db.Integer, db.ForeignKey("preventive_report.id"), nullable=False)
-    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"))
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    report_id = db.Column(db.Integer, db.ForeignKey("preventive_report.id"), nullable=False, index=True)
+    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     performed_hours = db.Column(db.Float, default=0.0)
     hours_before_maintenance = db.Column(db.Float)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
 
     machine = db.relationship("Machine", backref="maintenance_entries")
     report = db.relationship("PreventiveReport")
@@ -334,9 +483,9 @@ class MaintenanceEntryValue(db.Model):
 
 class MaintenanceProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
-    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True)  # Pour les machines racines avec compteurs multiples
-    report_id = db.Column(db.Integer, db.ForeignKey("preventive_report.id"), nullable=False)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # Pour les machines racines avec compteurs multiples
+    report_id = db.Column(db.Integer, db.ForeignKey("preventive_report.id"), nullable=False, index=True)
     hours_since = db.Column(db.Float, nullable=False, default=0.0)
 
     machine = db.relationship("Machine", backref="maintenance_progress")
@@ -351,12 +500,12 @@ class MaintenanceProgress(db.Model):
 
 class CorrectiveMaintenance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
-    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"))
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     comment = db.Column(db.Text)
     hours = db.Column(db.Float, default=0.0)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
 
     machine = db.relationship("Machine", backref="corrective_maintenances")
     stock = db.relationship("Stock")
@@ -410,11 +559,11 @@ class MaintenancePhoto(db.Model):
 
 class CounterLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
-    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True)  # None pour compteur machine, ID pour compteur multiple
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # None pour compteur machine, ID pour compteur multiple
     previous_hours = db.Column(db.Float, nullable=False)
     new_hours = db.Column(db.Float, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
 
     machine = db.relationship("Machine", backref="counter_logs")
     counter = db.relationship("Counter", backref="counter_logs")
@@ -422,7 +571,7 @@ class CounterLog(db.Model):
 
 class ChecklistTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
     name = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 
@@ -452,10 +601,10 @@ class ChecklistItem(db.Model):
 
 class ChecklistInstance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    template_id = db.Column(db.Integer, db.ForeignKey("checklist_template.id"), nullable=False)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
-    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
+    template_id = db.Column(db.Integer, db.ForeignKey("checklist_template.id"), nullable=False, index=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
     comment = db.Column(db.Text)
 
     template = db.relationship("ChecklistTemplate", back_populates="instances")
@@ -481,15 +630,15 @@ class ChecklistInstanceValue(db.Model):
 class ChatMessage(db.Model):
     """Messages du chat (manuels et automatiques)"""
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)  # None pour messages auto
-    message_type = db.Column(db.String(20), nullable=False)  # 'manual' ou 'auto'
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)  # None pour messages auto
+    message_type = db.Column(db.String(20), nullable=False, index=True)  # 'manual' ou 'auto'
     content = db.Column(db.Text, nullable=False)
     link_url = db.Column(db.String(500), nullable=True)  # Lien vers la tâche réalisée
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=True)
-    reply_to_id = db.Column(db.Integer, db.ForeignKey("chat_message.id"), nullable=True)  # Message auquel on répond
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=True, index=True)
+    reply_to_id = db.Column(db.Integer, db.ForeignKey("chat_message.id"), nullable=True, index=True)  # Message auquel on répond
     edited_at = db.Column(db.DateTime, nullable=True)  # Date de dernière modification
-    deleted_at = db.Column(db.DateTime, nullable=True)  # Date de suppression (soft delete)
-    created_at = db.Column(db.DateTime, default=dt.datetime.utcnow, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)  # Date de suppression (soft delete)
+    created_at = db.Column(db.DateTime, default=dt.datetime.utcnow, nullable=False, index=True)
 
     user = db.relationship("User", backref="chat_messages")
     machine = db.relationship("Machine")
@@ -508,11 +657,11 @@ class ChatReadStatus(db.Model):
 class Report(db.Model):
     """Rapports de poste/jour créés par les utilisateurs"""
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=dt.datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=dt.datetime.utcnow, nullable=False, index=True)
     edited_at = db.Column(db.DateTime, nullable=True)  # Date de dernière modification
-    deleted_at = db.Column(db.DateTime, nullable=True)  # Date de suppression (soft delete)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)  # Date de suppression (soft delete)
 
     user = db.relationship("User", backref="reports")
     photos = db.relationship(
@@ -532,8 +681,164 @@ class ReportPhoto(db.Model):
 
     report = db.relationship("Report", back_populates="photos")
 
+
+class ExcelFile(db.Model):
+    """Fichiers Excel uploadés par les administrateurs"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)  # Nom personnalisé donné par l'utilisateur
+    filename = db.Column(db.String(255), nullable=False)  # Nom du fichier sur le disque
+    original_filename = db.Column(db.String(255), nullable=False)  # Nom original du fichier uploadé
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=dt.datetime.utcnow, nullable=False)
+    
+    user = db.relationship("User", backref="uploaded_excel_files")
+
 with app.app_context():
     db.create_all()
+    # Ajouter les index manquants pour optimiser les performances
+    try:
+        inspector = inspect(db.engine)
+        # Créer les index si nécessaire (pour les bases existantes)
+        # PostgreSQL supporte "CREATE INDEX IF NOT EXISTS" depuis la version 9.5
+        # Pour SQLite, cette syntaxe est supportée depuis la version 3.9.0
+        with db.engine.connect() as conn:
+            # Index pour Machine
+            try:
+                # Vérifier si l'index existe déjà (compatible avec PostgreSQL et SQLite)
+                indexes = [idx['name'] for idx in inspector.get_indexes('machine')]
+                if 'ix_machine_parent_id' not in indexes:
+                    conn.execute(text("CREATE INDEX ix_machine_parent_id ON machine(parent_id)"))
+                if 'ix_machine_stock_id' not in indexes:
+                    conn.execute(text("CREATE INDEX ix_machine_stock_id ON machine(stock_id)"))
+                conn.commit()
+            except Exception:
+                # Fallback: utiliser CREATE INDEX IF NOT EXISTS si la vérification échoue
+                try:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_machine_parent_id ON machine(parent_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_machine_stock_id ON machine(stock_id)"))
+                    conn.commit()
+                except Exception:
+                    pass
+            
+            # Index pour FollowedMachine
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_followed_machine_user_id ON followed_machine(user_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_followed_machine_machine_id ON followed_machine(machine_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour Counter
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_counter_machine_id ON counter(machine_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour Movement
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_movement_source_stock_id ON movement(source_stock_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_movement_dest_stock_id ON movement(dest_stock_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_movement_created_at ON movement(created_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour MaintenanceEntry
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_entry_machine_id ON maintenance_entry(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_entry_report_id ON maintenance_entry(report_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_entry_stock_id ON maintenance_entry(stock_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_entry_user_id ON maintenance_entry(user_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_entry_created_at ON maintenance_entry(created_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour MaintenanceProgress
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_progress_machine_id ON maintenance_progress(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_progress_counter_id ON maintenance_progress(counter_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_maintenance_progress_report_id ON maintenance_progress(report_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour CorrectiveMaintenance
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_corrective_maintenance_machine_id ON corrective_maintenance(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_corrective_maintenance_stock_id ON corrective_maintenance(stock_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_corrective_maintenance_user_id ON corrective_maintenance(user_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_corrective_maintenance_created_at ON corrective_maintenance(created_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour CounterLog
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_counter_log_machine_id ON counter_log(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_counter_log_counter_id ON counter_log(counter_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_counter_log_created_at ON counter_log(created_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour ChecklistTemplate
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_template_machine_id ON checklist_template(machine_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour ChecklistInstance
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_template_id ON checklist_instance(template_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_machine_id ON checklist_instance(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_user_id ON checklist_instance(user_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_created_at ON checklist_instance(created_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour PreventiveReport
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_preventive_report_machine_id ON preventive_report(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_preventive_report_counter_id ON preventive_report(counter_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour ChatMessage
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chat_message_user_id ON chat_message(user_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chat_message_message_type ON chat_message(message_type)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chat_message_machine_id ON chat_message(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chat_message_reply_to_id ON chat_message(reply_to_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chat_message_deleted_at ON chat_message(deleted_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chat_message_created_at ON chat_message(created_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour Report
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_report_user_id ON report(user_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_report_created_at ON report(created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_report_deleted_at ON report(deleted_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour StockProduct
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stock_product_stock_id ON stock_product(stock_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stock_product_product_id ON stock_product(product_id)"))
+                conn.commit()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    
     try:
         inspector = inspect(db.engine)
         columns = {col["name"] for col in inspector.get_columns("maintenance_entry")}
@@ -573,11 +878,19 @@ with app.app_context():
                     conn.commit()
             if "edited_at" not in chat_message_columns:
                 with db.engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE chat_message ADD COLUMN edited_at DATETIME"))
+                    # Utiliser TIMESTAMP pour PostgreSQL, DATETIME pour SQLite
+                    if database_url and "postgresql" in database_url:
+                        conn.execute(text("ALTER TABLE chat_message ADD COLUMN edited_at TIMESTAMP"))
+                    else:
+                        conn.execute(text("ALTER TABLE chat_message ADD COLUMN edited_at DATETIME"))
                     conn.commit()
             if "deleted_at" not in chat_message_columns:
                 with db.engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE chat_message ADD COLUMN deleted_at DATETIME"))
+                    # Utiliser TIMESTAMP pour PostgreSQL, DATETIME pour SQLite
+                    if database_url and "postgresql" in database_url:
+                        conn.execute(text("ALTER TABLE chat_message ADD COLUMN deleted_at TIMESTAMP"))
+                    else:
+                        conn.execute(text("ALTER TABLE chat_message ADD COLUMN deleted_at DATETIME"))
                     conn.commit()
     except Exception as exc:
         print(f"Error migrating chat_message table: {exc}")
@@ -727,8 +1040,13 @@ def index():
     overdue = []
     warning = []
 
+    # Charger progress_records une seule fois avec eager loading
     progress_records = (
-        MaintenanceProgress.query.join(MaintenanceProgress.machine).join(MaintenanceProgress.report).all()
+        MaintenanceProgress.query
+        .options(joinedload(MaintenanceProgress.machine), joinedload(MaintenanceProgress.report))
+        .join(MaintenanceProgress.machine)
+        .join(MaintenanceProgress.report)
+        .all()
     )
 
     last_entry_rows = (
@@ -768,18 +1086,27 @@ def index():
                 }
             )
 
-    # Calculer le nombre de produits en dessous du stock minimum dans le premier stock
+    # Optimiser le calcul du stock minimum : une seule requête avec jointure
     first_stock = Stock.query.order_by(Stock.id).first()
     low_stock_count = 0
     if first_stock:
-        for product in Product.query.all():
-            if product.minimum_stock > 0:
-                stock_item = StockProduct.query.filter_by(
-                    stock_id=first_stock.id, product_id=product.id
-                ).first()
-                current_quantity = stock_item.quantity if stock_item else 0.0
-                if current_quantity < product.minimum_stock:
-                    low_stock_count += 1
+        # Utiliser une requête SQL optimisée au lieu d'une boucle
+        low_stock_products = (
+            db.session.query(Product.id)
+            .outerjoin(StockProduct, db.and_(
+                StockProduct.product_id == Product.id,
+                StockProduct.stock_id == first_stock.id
+            ))
+            .filter(
+                Product.minimum_stock > 0,
+                db.or_(
+                    StockProduct.quantity.is_(None),
+                    StockProduct.quantity < Product.minimum_stock
+                )
+            )
+            .count()
+        )
+        low_stock_count = low_stock_products
 
     # Statistiques supplémentaires
     # Nombre total de maintenances (préventives + correctives)
@@ -809,11 +1136,8 @@ def index():
     followed_machines_data = []
     followed_machines = FollowedMachine.query.filter_by(user_id=current_user.id).all()
     
-    # Calculer l'état de maintenance pour chaque machine (réutiliser la logique de machines())
+    # Calculer l'état de maintenance pour chaque machine (réutiliser progress_records déjà chargé)
     machine_status = {}
-    progress_records = (
-        MaintenanceProgress.query.join(MaintenanceProgress.machine).join(MaintenanceProgress.report).all()
-    )
     
     for record in progress_records:
         machine = record.machine
@@ -857,26 +1181,40 @@ def index():
             current = current.parent
         return False
     
-    # Récupérer TOUTES les machines racines pour les afficher sur la page d'accueil
-    all_roots = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
+    # Récupérer TOUTES les machines racines UNE SEULE FOIS avec eager loading des compteurs
+    all_roots = (
+        Machine.query
+        .filter_by(parent_id=None)
+        .options(joinedload(Machine.counters), joinedload(Machine.parent))
+        .order_by(Machine.name)
+        .all()
+    )
+    
+    # Créer un mapping de couleur basé sur le color_index
+    root_color_map = {root.id: (root.color_index if root.color_index is not None else 0) for root in all_roots}
+    
+    # Charger toutes les machines suivies en une seule requête pour éviter N+1
+    followed_machine_ids_list = [fm.machine_id for fm in followed_machines]
+    followed_machines_dict = {}
+    if followed_machine_ids_list:
+        followed_machines_loaded = (
+            Machine.query
+            .filter(Machine.id.in_(followed_machine_ids_list))
+            .options(joinedload(Machine.parent))
+            .all()
+        )
+        followed_machines_dict = {m.id: m for m in followed_machines_loaded}
     
     # Identifier quelles machines racines ont des machines suivies dans leur arborescence
     roots_with_followed = set()
     for followed in followed_machines:
-        machine = Machine.query.get(followed.machine_id)
+        machine = followed_machines_dict.get(followed.machine_id)
         if machine and not is_followed_via_parent(machine):
             # Trouver la machine racine de cette arborescence
             root_machine = machine
             while root_machine.parent:
                 root_machine = root_machine.parent
             roots_with_followed.add(root_machine.id)
-    
-    # Créer un mapping de couleur basé sur l'ordre alphabétique de TOUTES les machines racines
-    # pour garantir que chaque machine a toujours la même couleur
-    all_roots_ordered = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
-    root_color_map = {}
-    for idx, root in enumerate(all_roots_ordered):
-        root_color_map[root.id] = idx % 10
     
     # Créer les données pour toutes les machines racines
     for root_machine in all_roots:
@@ -902,9 +1240,9 @@ def index():
             current = current.parent
         return False
     
-    # Récupérer les machines suivies pour l'affichage des étoiles
+    # Récupérer les machines suivies pour l'affichage des étoiles (réutiliser all_roots)
     followed_machine_ids = set()
-    for root in Machine.query.filter_by(parent_id=None).order_by(Machine.name).all():
+    for root in all_roots:
         for node, level in build_machine_tree(root):
             if is_machine_followed(node):
                 followed_machine_ids.add(node.id)
@@ -912,12 +1250,17 @@ def index():
     # Calculer le nombre de maintenances en retard pour les machines suivies
     followed_overdue_count = 0
     if followed_machine_ids:
+        # Charger toutes les machines suivies en une seule requête
+        all_followed_machines_loaded = (
+            Machine.query
+            .filter(Machine.id.in_(list(followed_machine_ids)))
+            .all()
+        )
+        
         # Récupérer toutes les machines suivies (y compris les enfants)
         all_followed_machines = []
-        for machine_id in followed_machine_ids:
-            machine = Machine.query.get(machine_id)
-            if machine:
-                all_followed_machines.extend(get_all_descendants(machine))
+        for machine in all_followed_machines_loaded:
+            all_followed_machines.extend(get_all_descendants(machine))
         
         # Dédupliquer les machines
         unique_followed_machines = {m.id: m for m in all_followed_machines}
@@ -992,7 +1335,7 @@ def logout():
 @app.route("/set-language/<lang>")
 def set_language(lang):
     """Route pour changer la langue de l'interface (accessible même sans être connecté)"""
-    if lang in ['fr', 'es', 'en']:
+    if lang in ['fr', 'es', 'en', 'it']:
         session['language'] = lang
     # Rediriger vers la page précédente ou l'accueil
     return redirect(request.referrer or url_for('index'))
@@ -1003,6 +1346,13 @@ def set_language(lang):
 def users():
     all_users = User.query.order_by(User.username).all()
     return render_template("users.html", users=all_users)
+
+
+@app.route("/permissions-summary")
+@admin_required
+def permissions_summary():
+    """Page de récapitulatif des droits d'accès"""
+    return render_template("permissions_summary.html")
 
 
 @app.route("/users/new", methods=["GET", "POST"])
@@ -1059,20 +1409,26 @@ def delete_user(user_id):
 @app.route("/machines")
 @login_required
 def machines():
-    # Charger les machines racines avec leurs compteurs
-    roots = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
-    
-    # Précharger les compteurs pour toutes les machines racines
-    root_ids = [root.id for root in roots]
-    if root_ids:
-        Counter.query.filter(Counter.machine_id.in_(root_ids)).all()
+    # Charger les machines racines avec eager loading des compteurs
+    roots = (
+        Machine.query
+        .filter_by(parent_id=None)
+        .options(joinedload(Machine.counters))
+        .order_by(Machine.name)
+        .all()
+    )
     
     # Calculer l'état de maintenance pour chaque machine
     threshold_ratio = 0.10
     machine_status = {}  # machine_id -> 'danger' (dépassé), 'warning' (proche), ou None
     
+    # Charger progress_records avec eager loading
     progress_records = (
-        MaintenanceProgress.query.join(MaintenanceProgress.machine).join(MaintenanceProgress.report).all()
+        MaintenanceProgress.query
+        .options(joinedload(MaintenanceProgress.machine), joinedload(MaintenanceProgress.report))
+        .join(MaintenanceProgress.machine)
+        .join(MaintenanceProgress.report)
+        .all()
     )
     
     for record in progress_records:
@@ -1130,12 +1486,12 @@ def machines():
             if is_machine_followed(node):
                 followed_machine_ids.add(node.id)
     
-    # Créer un dictionnaire pour mapper chaque machine racine à son color_index (0-9)
-    # Basé sur l'ordre alphabétique de TOUTES les machines racines pour garantir la cohérence
+    # Créer un dictionnaire pour mapper chaque machine racine à son color_index
+    # Utiliser le color_index stocké dans la base de données
     all_roots_ordered = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
     machine_color_map = {}
-    for idx, root in enumerate(all_roots_ordered):
-        machine_color_map[root.id] = idx % 10
+    for root in all_roots_ordered:
+        machine_color_map[root.id] = root.color_index if root.color_index is not None else 0
     
     # Debug: s'assurer que toutes les machines racines ont une couleur
     print(f"DEBUG machines(): {len(all_roots_ordered)} machines racines, {len(machine_color_map)} dans le mapping")
@@ -1223,17 +1579,35 @@ def get_machine_detail_url(machine_id, tab=None):
 @app.route("/machines/<int:machine_id>")
 @login_required
 def machine_detail(machine_id):
-    machine = Machine.query.get_or_404(machine_id)
+    # Charger la machine avec eager loading des relations fréquemment utilisées
+    machine = (
+        Machine.query
+        .options(
+            joinedload(Machine.parent),
+            joinedload(Machine.children),
+            joinedload(Machine.counters)
+        )
+        .get_or_404(machine_id)
+    )
+    
+    # Charger les entries avec eager loading
     entries = (
-        MaintenanceEntry.query.filter_by(machine_id=machine.id)
+        MaintenanceEntry.query
+        .filter_by(machine_id=machine.id)
+        .options(joinedload(MaintenanceEntry.report), joinedload(MaintenanceEntry.user))
         .order_by(MaintenanceEntry.created_at.desc())
         .all()
     )
+    
+    # Charger les maintenances correctives avec eager loading
     corrective_maintenances = (
-        CorrectiveMaintenance.query.filter_by(machine_id=machine.id)
+        CorrectiveMaintenance.query
+        .filter_by(machine_id=machine.id)
+        .options(joinedload(CorrectiveMaintenance.user), joinedload(CorrectiveMaintenance.products))
         .order_by(CorrectiveMaintenance.created_at.desc())
         .all()
     )
+    
     # Récupérer les templates de maintenance
     templates = []
     template_progress = []
@@ -1249,38 +1623,35 @@ def machine_detail(machine_id):
     has_counter = has_own_counter or has_root_counters
     
     if has_counter:
-        templates = PreventiveReport.query.filter_by(machine_id=machine.id).order_by(PreventiveReport.name).all()
+        # Charger les templates avec eager loading
+        templates = (
+            PreventiveReport.query
+            .filter_by(machine_id=machine.id)
+            .options(joinedload(PreventiveReport.components), joinedload(PreventiveReport.counter))
+            .order_by(PreventiveReport.name)
+            .all()
+        )
     
     children = sorted(machine.children, key=lambda c: c.name)
     
     # S'assurer que tous les MaintenanceProgress existent pour cette machine
     if has_counter:
         ensure_all_progress_for_machine(machine)
-        # Vérifier et corriger les valeurs si nécessaire
-        # Si un MaintenanceProgress a une valeur de 0 alors que machine.hours > report.periodicity,
-        # et qu'aucune maintenance n'a été remplie récemment, on recalcule la valeur initiale correcte
-        if machine.hour_counter_enabled:
-            progress_records = MaintenanceProgress.query.filter_by(machine_id=machine.id, counter_id=None).all()
-            for progress in progress_records:
-                # Si hours_since est à 0 mais qu'aucune maintenance n'a été remplie,
-                # on recalcule pour utiliser la périodicité
-                if progress.hours_since == 0.0:
-                    # Vérifier s'il y a eu une maintenance remplie récemment
-                    last_entry = MaintenanceEntry.query.filter_by(
-                        machine_id=machine.id, report_id=progress.report.id
-                    ).order_by(MaintenanceEntry.created_at.desc()).first()
-                    # Si pas de maintenance remplie, ou si la dernière maintenance était avant que la machine n'ait des heures,
-                    # on recalcule la valeur initiale à la périodicité
-                    if not last_entry or (last_entry.performed_hours or 0) < machine.hours:
-                        progress.hours_since = progress.report.periodicity
-                        db.session.add(progress)
-            db.session.commit()
+        # Ne pas modifier les valeurs existantes lors de la simple consultation
+        # Les valeurs ne doivent être modifiées que lors de l'enregistrement d'une maintenance
+        # ou lors de la modification du compteur
     
     # Construire template_progress si la machine a un compteur (classique ou multiples)
     # Et regrouper les entries par report_id pour affichage sous chaque modèle
     entries_by_report = {}
     if has_counter:
-        progress_records = MaintenanceProgress.query.filter_by(machine_id=machine.id).all()
+        # Charger progress_records avec eager loading
+        progress_records = (
+            MaintenanceProgress.query
+            .filter_by(machine_id=machine.id)
+            .options(joinedload(MaintenanceProgress.report), joinedload(MaintenanceProgress.counter))
+            .all()
+        )
         progress_map = {(record.report_id, record.counter_id): record for record in progress_records}
         for report in templates:
             # Utiliser counter_id comme clé si disponible, sinon None
@@ -1296,15 +1667,27 @@ def machine_detail(machine_id):
             # Regrouper les entries par report_id
             report_entries = [e for e in entries if e.report_id == report.id]
             entries_by_report[report.id] = sorted(report_entries, key=lambda e: e.created_at, reverse=True)
-    # Récupérer les documents de la machine
-    documents = MachineDocument.query.filter_by(machine_id=machine.id).order_by(MachineDocument.uploaded_at.desc()).all()
     
-    # Récupérer les modèles de check list de la machine avec leurs instances
-    checklist_templates = ChecklistTemplate.query.filter_by(machine_id=machine.id).order_by(ChecklistTemplate.name).all()
-    # Précharger les items et instances pour chaque template
-    for template in checklist_templates:
-        _ = template.items  # Précharger les items
-        _ = template.instances  # Précharger les instances
+    # Récupérer les documents de la machine
+    documents = (
+        MachineDocument.query
+        .filter_by(machine_id=machine.id)
+        .options(joinedload(MachineDocument.user))
+        .order_by(MachineDocument.uploaded_at.desc())
+        .all()
+    )
+    
+    # Récupérer les modèles de check list avec eager loading
+    checklist_templates = (
+        ChecklistTemplate.query
+        .filter_by(machine_id=machine.id)
+        .options(
+            joinedload(ChecklistTemplate.items),
+            selectinload(ChecklistTemplate.instances).joinedload(ChecklistInstance.user)
+        )
+        .order_by(ChecklistTemplate.name)
+        .all()
+    )
 
     # Récupérer les instances de check lists pour cette machine (historique)
     checklist_instances = (
@@ -1721,6 +2104,23 @@ def new_machine():
         # Déterminer si c'est une machine racine
         is_root = not parent_id
         
+        # Gérer le color_index
+        color_index = 0
+        if is_root:
+            # Pour les machines racines, récupérer le color_index du formulaire
+            try:
+                color_index = int(request.form.get("color_index", 0))
+                if color_index < 0 or color_index > 9:
+                    color_index = 0
+            except (ValueError, TypeError):
+                color_index = 0
+        else:
+            # Pour les sous-machines, hériter du color_index de la machine racine
+            root_machine = parent
+            while root_machine.parent:
+                root_machine = root_machine.parent
+            color_index = root_machine.color_index if root_machine.color_index is not None else 0
+        
         # Gérer les compteurs multiples pour les machines racines
         counters_data = []
         if is_root:
@@ -1751,6 +2151,7 @@ def new_machine():
             hours=initial_hours if has_counter and not is_root else 0.0,
             counter_unit=counter_unit if has_counter and not is_root else None,
             stock=stock,
+            color_index=color_index,
         )
         db.session.add(machine)
         db.session.flush()  # Pour obtenir l'ID de la machine
@@ -1840,6 +2241,24 @@ def edit_machine(machine_id):
                 return redirect(request.url)
         
         stock = Stock.query.get(stock_id) if stock_id else None
+        
+        # Gérer le color_index
+        is_root = not parent
+        if is_root:
+            # Pour les machines racines, récupérer le color_index du formulaire
+            try:
+                color_index = int(request.form.get("color_index", machine.color_index or 0))
+                if color_index < 0 or color_index > 9:
+                    color_index = machine.color_index or 0
+            except (ValueError, TypeError):
+                color_index = machine.color_index or 0
+            machine.color_index = color_index
+        else:
+            # Pour les sous-machines, hériter du color_index de la machine racine
+            root_machine = parent
+            while root_machine.parent:
+                root_machine = root_machine.parent
+            machine.color_index = root_machine.color_index if root_machine.color_index is not None else 0
         
         machine.name = name
         machine.code = code
@@ -2216,27 +2635,50 @@ def products():
     except (ValueError, TypeError):
         filter_stock_id = None
     
-    all_products = Product.query.order_by(Product.name).all()
+    # Charger tous les produits avec eager loading des stock_products
+    all_products = (
+        Product.query
+        .order_by(Product.name)
+        .all()
+    )
     all_stocks = Stock.query.order_by(Stock.name).all()
     # Identifier le stock principal (même logique que la page stocks : premier stock par ID)
     first_stock = Stock.query.order_by(Stock.id).first()
     main_stock_id = first_stock.id if first_stock else None
     
+    # Charger toutes les quantités de stock en une seule requête pour éviter N+1
+    stock_products_dict = {}
+    if first_stock:
+        stock_products = (
+            StockProduct.query
+            .filter_by(stock_id=first_stock.id)
+            .all()
+        )
+        stock_products_dict = {sp.product_id: sp.quantity for sp in stock_products}
+    
+    # Charger toutes les quantités de stock en une seule requête pour éviter N+1
+    all_stock_products = (
+        StockProduct.query
+        .filter(StockProduct.stock_id.in_([s.id for s in all_stocks]))
+        .all()
+    )
+    
     # Créer un dictionnaire pour accéder rapidement aux quantités
     # Structure: {product_id: {stock_id: quantity}}
     quantities_by_product = {}
     total_by_product = {}  # Somme totale des quantités par produit
+    
+    # Initialiser les dictionnaires pour tous les produits
     for product in all_products:
         quantities_by_product[product.id] = {}
-        total = 0.0
-        for stock in all_stocks:
-            stock_product = StockProduct.query.filter_by(
-                product_id=product.id, stock_id=stock.id
-            ).first()
-            qty = stock_product.quantity if stock_product else 0.0
-            quantities_by_product[product.id][stock.id] = qty
-            total += qty
-        total_by_product[product.id] = total
+        total_by_product[product.id] = 0.0
+    
+    # Remplir avec les données chargées
+    for sp in all_stock_products:
+        if sp.product_id not in quantities_by_product:
+            quantities_by_product[sp.product_id] = {}
+        quantities_by_product[sp.product_id][sp.stock_id] = sp.quantity
+        total_by_product[sp.product_id] = total_by_product.get(sp.product_id, 0.0) + sp.quantity
     
     # Appliquer les filtres
     filtered_products = all_products
@@ -2722,7 +3164,7 @@ def delete_product(product_id):
 
 
 @app.route("/stocks")
-@admin_or_manager_required
+@login_required
 def stocks():
     all_stocks = Stock.query.order_by(Stock.name).all()
     # Identifier le stock principal (premier stock par ID)
@@ -2783,14 +3225,14 @@ def _get_or_create_stock_product(stock_id, product_id):
 
 
 @app.route("/stocks/<int:stock_id>", methods=["GET", "POST"])
-@admin_or_manager_required
+@login_required
 def manage_stock(stock_id):
     stock = Stock.query.get_or_404(stock_id)
     products = Product.query.order_by(Product.name).all()
     if request.method == "POST":
-        # Seul l'admin peut modifier les stocks
-        if current_user.user_type != "admin":
-            flash("Accès refusé : cette fonctionnalité est réservée aux administrateurs.", "danger")
+        # Vérifier les permissions pour modifier les stocks
+        if not can_edit_stocks_products() or is_readonly_stocks_products():
+            flash("Accès refusé : vous n'avez pas les droits pour modifier ce stock.", "danger")
             return redirect(url_for("manage_stock", stock_id=stock_id))
         action = request.form["action"]
         product_id = int(request.form["product_id"])
@@ -2824,15 +3266,21 @@ def manage_stock(stock_id):
 
 
 @app.route("/stocks/<int:stock_id>/inventory", methods=["GET", "POST"])
-@admin_or_manager_required
+@login_required
 def create_inventory(stock_id):
     stock = Stock.query.get_or_404(stock_id)
     
     if request.method == "POST":
+        # Compter le nombre d'inventaires existants pour ce stock pour générer le nom
+        existing_inventories_count = Inventory.query.filter_by(stock_id=stock_id).count()
+        inventory_number = existing_inventories_count + 1
+        inventory_name = f"{stock.name} #{inventory_number}"
+        
         # Créer l'inventaire
         inventory = Inventory(
             stock_id=stock_id,
             user_id=current_user.id,
+            name=inventory_name,
             created_at=dt.datetime.utcnow()
         )
         
@@ -2900,7 +3348,7 @@ def create_inventory(stock_id):
             
             create_chat_message(
                 message_type="auto",
-                content=f"{current_user.username} a créé un inventaire pour le stock '{stock.name}'{machine_name}",
+                content=f"{current_user.username} a créé l'inventaire '{inventory.name}'{machine_name}",
                 link_url=url_for("inventory_detail", inventory_id=inventory.id),
                 machine_id=machine_id_for_msg
             )
@@ -2924,6 +3372,217 @@ def create_inventory(stock_id):
         })
     
     return render_template("inventory_form.html", stock=stock, products_data=products_data)
+
+
+@app.route("/stocks/<int:stock_id>/inventory/import", methods=["GET", "POST"])
+@login_required
+def import_inventory(stock_id):
+    stock = Stock.query.get_or_404(stock_id)
+    
+    if request.method == "POST":
+        if "file" not in request.files:
+            flash("Aucun fichier sélectionné", "danger")
+            return redirect(url_for("stocks"))
+        
+        file = request.files["file"]
+        if not file or file.filename == "":
+            flash("Aucun fichier sélectionné", "danger")
+            return redirect(url_for("stocks"))
+        
+        # Vérifier l'extension du fichier
+        filename = file.filename.lower()
+        if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
+            flash("Le fichier doit être au format Excel (.xlsx ou .xls)", "danger")
+            return redirect(url_for("stocks"))
+        
+        try:
+            # Lire le fichier Excel depuis le stream
+            file_content = file.read()
+            if not file_content:
+                flash("Le fichier est vide", "danger")
+                return redirect(url_for("stocks"))
+            
+            file_stream = BytesIO(file_content)
+            wb = load_workbook(file_stream, data_only=True)
+            ws = wb.active
+            
+            if ws.max_row < 2:
+                flash("Le fichier Excel doit contenir au moins une ligne de données (en plus des en-têtes)", "danger")
+                return redirect(url_for("stocks"))
+            
+            # Compter le nombre d'inventaires existants pour ce stock pour générer le nom
+            existing_inventories_count = Inventory.query.filter_by(stock_id=stock_id).count()
+            inventory_number = existing_inventories_count + 1
+            inventory_name = f"{stock.name} #{inventory_number}"
+            
+            # Créer l'inventaire
+            inventory = Inventory(
+                stock_id=stock_id,
+                user_id=current_user.id,
+                name=inventory_name,
+                created_at=dt.datetime.utcnow()
+            )
+            
+            # Récupérer les produits du stock avec leurs quantités actuelles
+            stock_products = StockProduct.query.filter_by(stock_id=stock_id).all()
+            product_quantities = {sp.product_id: sp.quantity for sp in stock_products}
+            
+            imported_count = 0
+            skipped_count = 0
+            errors = []
+            has_changes = False
+            
+            # Parcourir à partir de la ligne 2 (en supposant que la ligne 1 contient les en-têtes)
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                # Ignorer les lignes vides
+                if not row or not any(row):
+                    continue
+                
+                # Extraire les valeurs (nom, code, prix, fournisseur, stock min, quantité)
+                name = None
+                code = None
+                if row[0] is not None:
+                    name_str = str(row[0]).strip()
+                    name = name_str if name_str else None
+                if row[1] is not None:
+                    code_str = str(row[1]).strip()
+                    code = code_str if code_str else None
+                
+                price = 0.0
+                supplier_name = None
+                minimum_stock = 0.0
+                quantity = 0.0
+                
+                # Vérifier que nom et code sont présents
+                if not name or not code:
+                    skipped_count += 1
+                    errors.append(f"Ligne {row_idx}: Nom ou code manquant")
+                    continue
+                
+                # Extraire le prix (colonne 3)
+                if len(row) > 2 and row[2] is not None:
+                    try:
+                        price = float(row[2])
+                    except (ValueError, TypeError):
+                        price = 0.0
+                
+                # Extraire le fournisseur (colonne 4)
+                if len(row) > 3 and row[3] is not None:
+                    supplier_str = str(row[3]).strip()
+                    supplier_name = supplier_str if supplier_str and supplier_str.lower() != "none" else None
+                
+                # Extraire le stock minimum (colonne 5)
+                if len(row) > 4 and row[4] is not None:
+                    try:
+                        minimum_stock = float(row[4])
+                    except (ValueError, TypeError):
+                        minimum_stock = 0.0
+                
+                # Extraire la quantité (colonne 6) - obligatoire pour l'inventaire
+                if len(row) > 5 and row[5] is not None:
+                    try:
+                        quantity = float(row[5])
+                    except (ValueError, TypeError):
+                        skipped_count += 1
+                        errors.append(f"Ligne {row_idx}: Quantité invalide")
+                        continue
+                else:
+                    skipped_count += 1
+                    errors.append(f"Ligne {row_idx}: Quantité manquante")
+                    continue
+                
+                # Chercher le produit par code
+                product = Product.query.filter_by(code=code).first()
+                
+                # Si le produit n'existe pas, le créer et l'ajouter à la base de données
+                # Les nouveaux produits seront visibles dans la page produits après le commit
+                if not product:
+                    product = Product(
+                        name=name,
+                        code=code,
+                        price=price,
+                        supplier_name=supplier_name,
+                        minimum_stock=minimum_stock,
+                    )
+                    db.session.add(product)
+                    db.session.flush()  # Pour obtenir l'ID du produit et s'assurer qu'il est dans la session
+                    imported_count += 1
+                
+                # Récupérer la quantité précédente
+                previous_quantity = product_quantities.get(product.id, 0.0)
+                
+                # Ignorer si la quantité n'a pas changé
+                if abs(quantity - previous_quantity) < 0.01:
+                    continue
+                
+                has_changes = True
+                
+                # Créer l'item d'inventaire
+                item = InventoryItem(
+                    inventory=inventory,
+                    product_id=product.id,
+                    previous_quantity=previous_quantity,
+                    new_quantity=quantity,
+                    comment=None
+                )
+                inventory.items.append(item)
+                
+                # Mettre à jour la quantité dans le stock
+                stock_product = StockProduct.query.filter_by(stock_id=stock_id, product_id=product.id).first()
+                if stock_product:
+                    stock_product.quantity = quantity
+                else:
+                    # Créer une nouvelle entrée si le produit n'était pas dans le stock
+                    stock_product = StockProduct(stock_id=stock_id, product_id=product.id, quantity=quantity)
+                    db.session.add(stock_product)
+            
+            if not has_changes:
+                flash("Aucune modification de quantité détectée", "warning")
+                return redirect(url_for("stocks"))
+            
+            # Commit toutes les modifications
+            try:
+                db.session.add(inventory)
+                db.session.commit()
+                
+                # Message automatique pour le chat
+                machine_name = ""
+                machine_id_for_msg = None
+                machine_with_stock = Machine.query.filter_by(stock_id=stock.id).first()
+                if machine_with_stock:
+                    machine_name = f" sur la machine '{machine_with_stock.name}'"
+                    machine_id_for_msg = machine_with_stock.id
+                
+                create_chat_message(
+                    message_type="auto",
+                    content=f"{current_user.username} a créé l'inventaire '{inventory.name}'{machine_name}",
+                    link_url=url_for("inventory_detail", inventory_id=inventory.id),
+                    machine_id=machine_id_for_msg
+                )
+                
+                if imported_count > 0:
+                    flash(f"Inventaire créé avec succès. {imported_count} nouveau(x) produit(s) créé(s).", "success")
+                else:
+                    flash("Inventaire créé avec succès", "success")
+                if skipped_count > 0:
+                    flash(f"{skipped_count} ligne(s) ignorée(s) (données invalides)", "warning")
+                if errors:
+                    error_summary = "; ".join(errors[:5])
+                    if len(errors) > 5:
+                        error_summary += f" ... et {len(errors) - 5} autre(s)"
+                    flash(f"Détails des erreurs: {error_summary}", "info")
+                
+                return redirect(url_for("inventories_list"))
+            except Exception as exc:
+                db.session.rollback()
+                flash(f"Erreur lors de l'import: {exc}", "danger")
+        
+        except Exception as exc:
+            flash(f"Erreur lors de la lecture du fichier: {exc}", "danger")
+        
+        return redirect(url_for("stocks"))
+    
+    return redirect(url_for("stocks"))
 
 
 @app.route("/inventories")
@@ -3903,6 +4562,30 @@ def get_product_stock_quantity(stock_id, product_id):
     quantity = stock_product.quantity if stock_product else 0
     
     return json.dumps({"quantity": float(quantity)})
+
+
+@app.route("/api/stock/<int:stock_id>/products")
+@login_required
+def get_stock_products(stock_id):
+    """API pour récupérer tous les produits disponibles dans un stock"""
+    stock = Stock.query.get_or_404(stock_id)
+    
+    # Récupérer tous les produits qui ont une quantité > 0 dans ce stock
+    stock_products = StockProduct.query.filter_by(stock_id=stock_id).filter(StockProduct.quantity > 0).all()
+    
+    products_data = []
+    for sp in stock_products:
+        products_data.append({
+            "id": sp.product.id,
+            "name": sp.product.name,
+            "code": sp.product.code,
+            "quantity": float(sp.quantity)
+        })
+    
+    # Trier par nom
+    products_data.sort(key=lambda x: x["name"])
+    
+    return jsonify({"products": products_data})
 
 
 @app.route("/api/maintenance-report/<int:report_id>/components")
@@ -5027,133 +5710,126 @@ def counter_report(machine_id=None):
     root_counters = []  # Liste des compteurs de la machine racine (pour compatibilité)
     root_counters_by_machine = []  # Liste de tuples (machine_racine, compteur) pour gérer plusieurs machines racines
     
-    # Si machine_id est fourni, récupérer cette machine racine et toutes ses sous-machines avec compteur
+    # Structure hiérarchique pour l'affichage
+    counter_hierarchy = []
+    
+    # Si machine_id est fourni, récupérer cette machine racine et construire sa hiérarchie
     if machine_id:
         root_machine = Machine.query.get_or_404(machine_id)
         if root_machine.parent_id is not None:
             flash("Cette route est réservée aux machines racines.", "danger")
             return redirect(url_for("machines"))
         
-        # Récupérer toutes les machines de l'arborescence (racine + descendants)
-        all_machines_in_tree = get_all_descendants(root_machine)
-        # Filtrer pour ne garder que celles avec compteur activé
-        machines_with_counters = [m for m in all_machines_in_tree if m.hour_counter_enabled]
-        machines_with_counters.sort(key=lambda m: m.name)
+        # Construire la hiérarchie des compteurs
+        counter_hierarchy = build_counter_hierarchy(root_machine, depth=0)
         
-        # Récupérer les compteurs de la machine racine
-        if root_machine.is_root() and root_machine.counters:
-            root_counters = sorted(root_machine.counters, key=lambda c: c.name)
-            root_counters_by_machine = [(root_machine, counter) for counter in root_counters]
-        
-        if not machines_with_counters and not root_counters:
+        if not counter_hierarchy:
             flash(f"Aucun compteur configuré dans l'arborescence de {root_machine.name}.", "warning")
             return redirect(url_for("machines"))
     else:
-        # Comportement par défaut : toutes les machines avec compteur
-        machines_with_counters = Machine.query.filter_by(hour_counter_enabled=True).order_by(Machine.name).all()
-        
-        # Récupérer toutes les machines racines avec compteurs multiples
+        # Comportement par défaut : toutes les machines racines avec leurs hiérarchies
         all_root_machines = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
         for root in all_root_machines:
-            if root.is_root() and root.counters:
-                for counter in sorted(root.counters, key=lambda c: c.name):
-                    root_counters_by_machine.append((root, counter))
+            root_hierarchy = build_counter_hierarchy(root, depth=0)
+            counter_hierarchy.extend(root_hierarchy)
         
-        # Pour compatibilité avec le template existant
-        if root_counters_by_machine:
-            root_counters = [counter for _, counter in root_counters_by_machine]
-            root_machine = root_counters_by_machine[0][0]  # Première machine racine pour l'affichage
-    
-    if not machines_with_counters and not root_counters:
-        flash("Aucun compteur configuré.", "warning")
-        return redirect(url_for("machines"))
+        if not counter_hierarchy:
+            flash("Aucun compteur configuré.", "warning")
+            return redirect(url_for("machines"))
+        
+        # Pour compatibilité avec le template (première machine racine trouvée)
+        root_machine = all_root_machines[0] if all_root_machines else None
 
     if request.method == "POST":
         updated = 0
         machines_updated = []  # Liste des machines mises à jour pour le message
         
-        # Traiter les compteurs des machines
-        for machine in machines_with_counters:
-            raw_value = request.form.get(f"machine_{machine.id}")
-            if raw_value is None or raw_value.strip() == "":
-                continue
-            try:
-                new_hours = float(raw_value)
-            except ValueError:
-                flash(f"Valeur invalide pour {machine.name}", "danger")
-                return redirect(request.url)
-            old_hours = machine.hours
-            if new_hours < old_hours:
-                unit = machine.counter_unit or 'h'
-                flash(f"Le nouveau compteur pour {machine.name} doit être supérieur ou égal à {old_hours} {unit}", "danger")
-                return redirect(request.url)
-            if new_hours == old_hours:
-                continue
-            log = CounterLog(machine=machine, previous_hours=old_hours, new_hours=new_hours)
-            delta = new_hours - old_hours
-            machine.hours = new_hours
-            db.session.add(log)
-            
-            # Mettre à jour uniquement les plans de maintenance de cette machine spécifique
-            existing_progress_list = MaintenanceProgress.query.filter_by(machine_id=machine.id, counter_id=None).all()
-            
-            # Créer les progress manquants pour cette machine
-            ensure_all_progress_for_machine(machine)
-            
-            # Mettre à jour les hours_since pour TOUS les progress qui existaient avant
-            for progress in existing_progress_list:
-                progress.hours_since = progress.hours_since - delta
-                db.session.add(progress)
-            updated += 1
-            machines_updated.append(machine.name)
-            machines_updated.append(machine.name)
-        
-        # Traiter les compteurs multiples de toutes les machines racines
-        for root_machine_for_counter, counter in root_counters_by_machine:
-            raw_value = request.form.get(f"counter_{counter.id}")
-            if raw_value is None or raw_value.strip() == "":
-                continue
-            try:
-                new_value = float(raw_value)
-            except ValueError:
-                flash(f"Valeur invalide pour {counter.name}", "danger")
-                return redirect(request.url)
-            old_value = counter.value
-            if new_value < old_value:
-                unit = counter.unit or 'h'
-                flash(f"Le nouveau compteur pour {counter.name} doit être supérieur ou égal à {old_value} {unit}", "danger")
-                return redirect(request.url)
-            if new_value == old_value:
-                continue
-            delta = new_value - old_value
-            counter.value = new_value
-            db.session.add(counter)
-            
-            # Créer un CounterLog pour ce compteur multiple
-            log = CounterLog(
-                machine=root_machine_for_counter,
-                counter_id=counter.id,
-                previous_hours=old_value,
-                new_hours=new_value
-            )
-            db.session.add(log)
-            
-            # Mettre à jour les progress de maintenance liés à ce compteur
-            # Pour toutes les machines de l'arborescence qui utilisent ce compteur
-            all_machines_in_tree = get_all_descendants(root_machine_for_counter)
-            all_machines_in_tree.append(root_machine_for_counter)
-            
-            for machine in all_machines_in_tree:
-                existing_progress_list = MaintenanceProgress.query.filter_by(
-                    machine_id=machine.id, 
-                    counter_id=counter.id
-                ).all()
+        # Traiter les compteurs depuis la hiérarchie
+        for item in counter_hierarchy:
+            if item['type'] == 'machine_single_counter':
+                # Compteur classique pour sous-machine
+                machine = item['machine']
+                raw_value = request.form.get(f"machine_{machine.id}")
+                if raw_value is None or raw_value.strip() == "":
+                    continue
+                try:
+                    new_hours = float(raw_value)
+                except ValueError:
+                    flash(f"Valeur invalide pour {machine.name}", "danger")
+                    return redirect(request.url)
+                old_hours = machine.hours
+                if new_hours < old_hours:
+                    unit = machine.counter_unit or 'h'
+                    flash(f"Le nouveau compteur pour {machine.name} doit être supérieur ou égal à {old_hours} {unit}", "danger")
+                    return redirect(request.url)
+                if new_hours == old_hours:
+                    continue
+                log = CounterLog(machine=machine, previous_hours=old_hours, new_hours=new_hours)
+                delta = new_hours - old_hours
+                machine.hours = new_hours
+                db.session.add(log)
                 
+                # Mettre à jour uniquement les plans de maintenance de cette machine spécifique
+                existing_progress_list = MaintenanceProgress.query.filter_by(machine_id=machine.id, counter_id=None).all()
+                
+                # Créer les progress manquants pour cette machine
+                ensure_all_progress_for_machine(machine)
+                
+                # Mettre à jour les hours_since pour TOUS les progress qui existaient avant
                 for progress in existing_progress_list:
                     progress.hours_since = progress.hours_since - delta
                     db.session.add(progress)
-            updated += 1
-            machines_updated.append(f"{counter.name} ({root_machine_for_counter.name})")
+                updated += 1
+                machines_updated.append(machine.name)
+            
+            elif item['type'] == 'machine_with_counters':
+                # Compteurs multiples pour machine racine
+                machine = item['machine']
+                for counter in item['counters']:
+                    raw_value = request.form.get(f"counter_{counter.id}")
+                    if raw_value is None or raw_value.strip() == "":
+                        continue
+                    try:
+                        new_value = float(raw_value)
+                    except ValueError:
+                        flash(f"Valeur invalide pour {counter.name}", "danger")
+                        return redirect(request.url)
+                    old_value = counter.value
+                    if new_value < old_value:
+                        unit = counter.unit or 'h'
+                        flash(f"Le nouveau compteur pour {counter.name} doit être supérieur ou égal à {old_value} {unit}", "danger")
+                        return redirect(request.url)
+                    if new_value == old_value:
+                        continue
+                    delta = new_value - old_value
+                    counter.value = new_value
+                    db.session.add(counter)
+                    
+                    # Créer un CounterLog pour ce compteur multiple
+                    log = CounterLog(
+                        machine=machine,
+                        counter_id=counter.id,
+                        previous_hours=old_value,
+                        new_hours=new_value
+                    )
+                    db.session.add(log)
+                    
+                    # Mettre à jour les progress de maintenance liés à ce compteur
+                    # Pour toutes les machines de l'arborescence qui utilisent ce compteur
+                    all_machines_in_tree = get_all_descendants(machine)
+                    all_machines_in_tree.append(machine)
+                    
+                    for m in all_machines_in_tree:
+                        existing_progress_list = MaintenanceProgress.query.filter_by(
+                            machine_id=m.id, 
+                            counter_id=counter.id
+                        ).all()
+                        
+                        for progress in existing_progress_list:
+                            progress.hours_since = progress.hours_since - delta
+                            db.session.add(progress)
+                    updated += 1
+                    machines_updated.append(f"{counter.name} ({machine.name})")
         
         if updated == 0:
             flash("Aucune valeur saisie ou changement détecté.", "warning")
@@ -5188,9 +5864,7 @@ def counter_report(machine_id=None):
     recent_logs = CounterLog.query.order_by(CounterLog.created_at.desc()).limit(50).all()
     root_machine_name = root_machine.name if machine_id and root_machine else None
     return render_template("counter_report.html", 
-                         machines=machines_with_counters, 
-                         root_counters=root_counters,
-                         root_counters_by_machine=root_counters_by_machine,
+                         counter_hierarchy=counter_hierarchy,
                          root_machine=root_machine,
                          logs=recent_logs, 
                          root_machine_name=root_machine_name)
@@ -5343,11 +6017,230 @@ def counter_logs():
     return render_template("counter_logs.html", logs=logs)
 
 
+@app.route("/maintenance-tracking")
+@login_required
+def maintenance_tracking():
+    """Page de suivi des actions M&Ms (Maintenances & Machines)"""
+    # Récupérer les paramètres de filtrage
+    filter_type = request.args.get('filter_type', '').strip()
+    filter_machine_id = request.args.get('filter_machine_id', '').strip()
+    filter_date_start = request.args.get('filter_date_start', '').strip()
+    filter_date_end = request.args.get('filter_date_end', '').strip()
+    
+    # Convertir filter_machine_id en int si fourni
+    try:
+        machine_id = int(filter_machine_id) if filter_machine_id else None
+    except (ValueError, TypeError):
+        machine_id = None
+    
+    # Convertir les dates
+    date_start = None
+    date_end = None
+    if filter_date_start:
+        try:
+            date_start = dt.datetime.strptime(filter_date_start, '%Y-%m-%d')
+        except ValueError:
+            pass
+    if filter_date_end:
+        try:
+            date_end = dt.datetime.strptime(filter_date_end, '%Y-%m-%d')
+            # Ajouter 23h59 pour inclure toute la journée
+            date_end = date_end.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            pass
+    
+    # Récupérer toutes les actions
+    all_actions = []
+    
+    # Maintenances préventives
+    if not filter_type or filter_type == 'preventive':
+        query = MaintenanceEntry.query
+        if machine_id:
+            query = query.filter_by(machine_id=machine_id)
+        if date_start:
+            query = query.filter(MaintenanceEntry.created_at >= date_start)
+        if date_end:
+            query = query.filter(MaintenanceEntry.created_at <= date_end)
+        entries = query.order_by(MaintenanceEntry.created_at.desc()).all()
+        for entry in entries:
+            all_actions.append({
+                'type': 'preventive',
+                'type_label': 'Maintenance préventive',
+                'name': entry.report.name,
+                'date': entry.created_at,
+                'machine': entry.machine,
+                'user': entry.user,
+                'url': url_for('maintenance_entry_detail', entry_id=entry.id)
+            })
+    
+    # Maintenances correctives
+    if not filter_type or filter_type == 'corrective':
+        query = CorrectiveMaintenance.query
+        if machine_id:
+            query = query.filter_by(machine_id=machine_id)
+        if date_start:
+            query = query.filter(CorrectiveMaintenance.created_at >= date_start)
+        if date_end:
+            query = query.filter(CorrectiveMaintenance.created_at <= date_end)
+        correctives = query.order_by(CorrectiveMaintenance.created_at.desc()).all()
+        for maintenance in correctives:
+            all_actions.append({
+                'type': 'corrective',
+                'type_label': 'Maintenance corrective',
+                'name': 'Maintenance corrective',
+                'date': maintenance.created_at,
+                'machine': maintenance.machine,
+                'user': maintenance.user,
+                'url': url_for('corrective_maintenance_detail', maintenance_id=maintenance.id)
+            })
+    
+    # Checklists
+    if not filter_type or filter_type == 'checklist':
+        query = ChecklistInstance.query
+        if machine_id:
+            query = query.filter_by(machine_id=machine_id)
+        if date_start:
+            query = query.filter(ChecklistInstance.created_at >= date_start)
+        if date_end:
+            query = query.filter(ChecklistInstance.created_at <= date_end)
+        checklists = query.order_by(ChecklistInstance.created_at.desc()).all()
+        for checklist in checklists:
+            all_actions.append({
+                'type': 'checklist',
+                'type_label': 'Check-list',
+                'name': checklist.template.name,
+                'date': checklist.created_at,
+                'machine': checklist.machine,
+                'user': checklist.user,
+                'url': url_for('checklist_instance_detail', machine_id=checklist.machine_id, template_id=checklist.template_id, instance_id=checklist.id)
+            })
+    
+    # Relevés de compteurs
+    if not filter_type or filter_type == 'counter':
+        query = CounterLog.query
+        if machine_id:
+            query = query.filter_by(machine_id=machine_id)
+        if date_start:
+            query = query.filter(CounterLog.created_at >= date_start)
+        if date_end:
+            query = query.filter(CounterLog.created_at <= date_end)
+        counter_logs = query.order_by(CounterLog.created_at.desc()).all()
+        for log in counter_logs:
+            counter_name = log.counter.name if log.counter else "Compteur machine"
+            all_actions.append({
+                'type': 'counter',
+                'type_label': 'Relevé compteur',
+                'name': counter_name,
+                'date': log.created_at,
+                'machine': log.machine,
+                'user': None,  # CounterLog n'a pas de user_id
+                'url': url_for('counter_logs')
+            })
+    
+    # Trier par date décroissante
+    all_actions.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Récupérer toutes les machines racines pour le filtre hiérarchique
+    root_machines = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
+    
+    return render_template(
+        "maintenance_tracking.html",
+        actions=all_actions,
+        root_machines=root_machines,
+        filter_type=filter_type,
+        filter_machine_id=machine_id,
+        filter_date_start=filter_date_start,
+        filter_date_end=filter_date_end
+    )
+
+
+@app.route("/stock-tracking")
+@login_required
+def stock_tracking():
+    """Page de suivi des actions S&P (Stocks & Produits)"""
+    # Récupérer les paramètres de filtrage
+    filter_type = request.args.get('filter_type', '').strip()
+    filter_date_start = request.args.get('filter_date_start', '').strip()
+    filter_date_end = request.args.get('filter_date_end', '').strip()
+    
+    # Convertir les dates
+    date_start = None
+    date_end = None
+    if filter_date_start:
+        try:
+            date_start = dt.datetime.strptime(filter_date_start, '%Y-%m-%d')
+        except ValueError:
+            pass
+    if filter_date_end:
+        try:
+            date_end = dt.datetime.strptime(filter_date_end, '%Y-%m-%d')
+            # Ajouter 23h59 pour inclure toute la journée
+            date_end = date_end.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            pass
+    
+    # Récupérer toutes les actions
+    all_actions = []
+    
+    # Mouvements
+    if not filter_type or filter_type == 'movement':
+        query = Movement.query
+        if date_start:
+            query = query.filter(Movement.created_at >= date_start)
+        if date_end:
+            query = query.filter(Movement.created_at <= date_end)
+        movements = query.order_by(Movement.created_at.desc()).all()
+        for movement in movements:
+            all_actions.append({
+                'type': 'movement',
+                'type_label': 'Mouvement',
+                'name': f"Mouvement {movement.type}",
+                'date': movement.created_at,
+                'stock_source': movement.source_stock,
+                'stock_dest': movement.dest_stock,
+                'user': None,  # Movement n'a pas de user_id
+                'url': url_for('movements')
+            })
+    
+    # Inventaires
+    if not filter_type or filter_type == 'inventory':
+        query = Inventory.query
+        if date_start:
+            query = query.filter(Inventory.created_at >= date_start)
+        if date_end:
+            query = query.filter(Inventory.created_at <= date_end)
+        inventories = query.order_by(Inventory.created_at.desc()).all()
+        for inventory in inventories:
+            # Utiliser le nom de l'inventaire s'il existe, sinon générer un nom par défaut
+            inventory_name = inventory.name if inventory.name else f"Inventaire {inventory.stock.name}"
+            all_actions.append({
+                'type': 'inventory',
+                'type_label': 'Inventaire',
+                'name': inventory_name,
+                'date': inventory.created_at,
+                'stock': inventory.stock,
+                'user': inventory.user,
+                'url': url_for('inventory_detail', inventory_id=inventory.id)
+            })
+    
+    # Trier par date décroissante
+    all_actions.sort(key=lambda x: x['date'], reverse=True)
+    
+    return render_template(
+        "stock_tracking.html",
+        actions=all_actions,
+        filter_type=filter_type,
+        filter_date_start=filter_date_start,
+        filter_date_end=filter_date_end
+    )
+
+
 @app.route("/database-export")
 @admin_required
 def database_export():
     """Page de gestion des exports de base de données"""
-    return render_template("database_export.html")
+    excel_files = ExcelFile.query.order_by(ExcelFile.created_at.desc()).all()
+    return render_template("database_export.html", excel_files=excel_files)
 
 
 @app.route("/database-export/maintenances/excel")
@@ -6146,10 +7039,50 @@ def get_all_descendants(machine):
     return descendants
 
 
+def build_counter_hierarchy(machine, depth=0):
+    """Construit une structure hiérarchique des machines avec compteurs pour l'affichage"""
+    items = []
+    
+    # Vérifier si cette machine a des compteurs à afficher
+    has_counters = False
+    
+    # Compteurs multiples pour machines racines
+    if machine.is_root() and machine.counters:
+        counters_list = sorted(machine.counters, key=lambda c: c.name)
+        if counters_list:
+            has_counters = True
+            items.append({
+                'type': 'machine_with_counters',
+                'machine': machine,
+                'counters': counters_list,
+                'depth': depth
+            })
+    
+    # Compteur classique pour sous-machines
+    elif machine.hour_counter_enabled:
+        has_counters = True
+        items.append({
+            'type': 'machine_single_counter',
+            'machine': machine,
+            'depth': depth
+        })
+    
+    # Parcourir récursivement les enfants (trier par nom pour un ordre cohérent)
+    for child in sorted(machine.children, key=lambda m: m.name):
+        items.extend(build_counter_hierarchy(child, depth + 1))
+    
+    return items
+
+
 def has_counter_in_tree(machine):
     """Vérifie si une machine ou une de ses sous-machines a un compteur activé"""
+    # Vérifier si la machine a un compteur horaire activé
     if machine.hour_counter_enabled:
         return True
+    # Pour les machines racines, vérifier si elles ont des compteurs multiples
+    if machine.is_root() and machine.counters:
+        return True
+    # Vérifier récursivement dans les enfants
     for child in machine.children:
         if has_counter_in_tree(child):
             return True
@@ -6788,7 +7721,8 @@ def checklists_manage():
 @login_required
 def get_dashboard_data():
     """API pour récupérer les données du tableau de bord"""
-    period = request.args.get('period', 'depuis_le_debut')  # semaine, mois, année, depuis_le_debut
+    date_start_str = request.args.get('date_start', '')
+    date_end_str = request.args.get('date_end', '')
     machine_ids_str = request.args.get('machine_ids', '')
     metrics_str = request.args.get('metrics', '')
     
@@ -6805,16 +7739,20 @@ def get_dashboard_data():
     if metrics_str:
         metrics = [m.strip() for m in metrics_str.split(',') if m.strip()]
     
-    # Calculer la date de début selon la période
-    now = dt.datetime.utcnow()
-    if period == 'semaine':
-        start_date = now - dt.timedelta(days=7)
-    elif period == 'mois':
-        start_date = now - dt.timedelta(days=30)
-    elif period == 'annee':
-        start_date = now - dt.timedelta(days=365)
-    else:  # depuis_le_debut
-        start_date = None
+    # Parser les dates
+    start_date = None
+    end_date = None
+    if date_start_str:
+        try:
+            start_date = dt.datetime.strptime(date_start_str, '%Y-%m-%d')
+        except (ValueError, TypeError):
+            pass
+    if date_end_str:
+        try:
+            # Ajouter 23h59m59s pour inclure toute la journée
+            end_date = dt.datetime.strptime(date_end_str, '%Y-%m-%d') + dt.timedelta(hours=23, minutes=59, seconds=59)
+        except (ValueError, TypeError):
+            pass
     
     # Récupérer toutes les machines suivies par l'utilisateur si aucune machine spécifiée
     if not selected_machine_ids:
@@ -6851,6 +7789,8 @@ def get_dashboard_data():
             query = MaintenanceEntry.query.filter(MaintenanceEntry.machine_id.in_(all_machine_ids_in_tree))
             if start_date:
                 query = query.filter(MaintenanceEntry.created_at >= start_date)
+            if end_date:
+                query = query.filter(MaintenanceEntry.created_at <= end_date)
             preventive_count = query.count()
             machine_data['metrics']['maintenances_preventives'] = preventive_count
         
@@ -6859,6 +7799,8 @@ def get_dashboard_data():
             query = CorrectiveMaintenance.query.filter(CorrectiveMaintenance.machine_id.in_(all_machine_ids_in_tree))
             if start_date:
                 query = query.filter(CorrectiveMaintenance.created_at >= start_date)
+            if end_date:
+                query = query.filter(CorrectiveMaintenance.created_at <= end_date)
             corrective_count = query.count()
             machine_data['metrics']['maintenances_curatives'] = corrective_count
         
@@ -6870,6 +7812,8 @@ def get_dashboard_data():
             query = MaintenanceEntry.query.filter(MaintenanceEntry.machine_id.in_(all_machine_ids_in_tree))
             if start_date:
                 query = query.filter(MaintenanceEntry.created_at >= start_date)
+            if end_date:
+                query = query.filter(MaintenanceEntry.created_at <= end_date)
             preventive_entries = query.all()
             
             for entry in preventive_entries:
@@ -6894,6 +7838,8 @@ def get_dashboard_data():
             query = CorrectiveMaintenance.query.filter(CorrectiveMaintenance.machine_id.in_(all_machine_ids_in_tree))
             if start_date:
                 query = query.filter(CorrectiveMaintenance.created_at >= start_date)
+            if end_date:
+                query = query.filter(CorrectiveMaintenance.created_at <= end_date)
             corrective_maintenances = query.all()
             
             for cm in corrective_maintenances:
@@ -6908,6 +7854,8 @@ def get_dashboard_data():
             query = ChecklistInstance.query.filter(ChecklistInstance.machine_id.in_(all_machine_ids_in_tree))
             if start_date:
                 query = query.filter(ChecklistInstance.created_at >= start_date)
+            if end_date:
+                query = query.filter(ChecklistInstance.created_at <= end_date)
             checklist_count = query.count()
             machine_data['metrics']['checklists'] = checklist_count
         
@@ -6916,6 +7864,8 @@ def get_dashboard_data():
             query = MaintenanceEntry.query.filter(MaintenanceEntry.machine_id.in_(all_machine_ids_in_tree))
             if start_date:
                 query = query.filter(MaintenanceEntry.created_at >= start_date)
+            if end_date:
+                query = query.filter(MaintenanceEntry.created_at <= end_date)
             preventive_entries = query.all()
             
             on_time_count = 0
@@ -6942,6 +7892,8 @@ def get_dashboard_data():
             query = CounterLog.query.filter(CounterLog.machine_id.in_(all_machine_ids_in_tree))
             if start_date:
                 query = query.filter(CounterLog.created_at >= start_date)
+            if end_date:
+                query = query.filter(CounterLog.created_at <= end_date)
             counter_count = query.count()
             machine_data['metrics']['mises_a_jour_compteur'] = counter_count
         
@@ -6949,8 +7901,7 @@ def get_dashboard_data():
     
     return jsonify({
         'success': True,
-        'data': results,
-        'period': period
+        'data': results
     })
 
 
@@ -6958,7 +7909,8 @@ def get_dashboard_data():
 @login_required
 def get_dashboard_chart_data():
     """API pour récupérer les données du tableau de bord groupées par période temporelle"""
-    period = request.args.get('period', 'depuis_le_debut')  # semaine, mois, année, depuis_le_debut
+    date_start_str = request.args.get('date_start', '')
+    date_end_str = request.args.get('date_end', '')
     machine_ids_str = request.args.get('machine_ids', '')
     metrics_str = request.args.get('metrics', '')
     
@@ -6975,20 +7927,39 @@ def get_dashboard_chart_data():
     if metrics_str:
         metrics = [m.strip() for m in metrics_str.split(',') if m.strip()]
     
-    # Calculer la date de début selon la période
-    now = dt.datetime.utcnow()
-    if period == 'semaine':
-        start_date = now - dt.timedelta(days=7)
-        time_group = 'day'  # Grouper par jour
-    elif period == 'mois':
-        start_date = now - dt.timedelta(days=30)
-        time_group = 'day'  # Grouper par jour
-    elif period == 'annee':
-        start_date = now - dt.timedelta(days=365)
-        time_group = 'month'  # Grouper par mois
-    else:  # depuis_le_debut
-        start_date = None
-        time_group = 'month'  # Grouper par mois par défaut
+    # Parser les dates
+    start_date = None
+    end_date = None
+    if date_start_str:
+        try:
+            start_date = dt.datetime.strptime(date_start_str, '%Y-%m-%d')
+        except (ValueError, TypeError):
+            pass
+    if date_end_str:
+        try:
+            # Ajouter 23h59m59s pour inclure toute la journée
+            end_date = dt.datetime.strptime(date_end_str, '%Y-%m-%d') + dt.timedelta(hours=23, minutes=59, seconds=59)
+        except (ValueError, TypeError):
+            pass
+    
+    # Déterminer le groupement temporel selon la période
+    if start_date and end_date:
+        # S'assurer que end_date est après start_date
+        if end_date < start_date:
+            end_date, start_date = start_date, end_date
+        delta = end_date - start_date
+        if delta.days <= 31:
+            time_group = 'day'  # Grouper par jour pour les périodes courtes
+        elif delta.days <= 365:
+            time_group = 'week'  # Grouper par semaine pour les périodes moyennes
+        else:
+            time_group = 'month'  # Grouper par mois pour les périodes longues
+    elif start_date:
+        # Si seulement date de début, utiliser le groupement par défaut
+        time_group = 'month'
+    else:
+        # Si aucune date, utiliser le groupement par mois
+        time_group = 'month'
     
     # Récupérer toutes les machines suivies par l'utilisateur si aucune machine spécifiée
     if not selected_machine_ids:
@@ -7000,7 +7971,6 @@ def get_dashboard_chart_data():
         return jsonify({
             'success': True,
             'data': [],
-            'period': period,
             'time_group': time_group
         })
     
@@ -7010,16 +7980,35 @@ def get_dashboard_chart_data():
     for machine in selected_machines:
         descendants = get_all_descendants(machine)
         all_machine_ids_in_trees.update([m.id for m in descendants])
+        # Ajouter aussi la machine elle-même
+        all_machine_ids_in_trees.add(machine.id)
     all_machine_ids_in_trees = list(all_machine_ids_in_trees)
+    
+    # Si aucune machine trouvée, retourner vide
+    if not all_machine_ids_in_trees:
+        return jsonify({
+            'success': True,
+            'data': [],
+            'time_group': time_group
+        })
     
     # Générer les périodes temporelles
     periods = []
     if start_date:
         current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        while current <= now:
+        end_limit = end_date if end_date else dt.datetime.utcnow()
+        while current <= end_limit:
             if time_group == 'day':
                 periods.append(current.date())
                 current += dt.timedelta(days=1)
+            elif time_group == 'week':
+                # Premier jour de la semaine (lundi)
+                days_since_monday = current.weekday()
+                week_start = current - dt.timedelta(days=days_since_monday)
+                week_start_date = week_start.date()
+                if not periods or periods[-1] != week_start_date:
+                    periods.append(week_start_date)
+                current = week_start + dt.timedelta(days=7)
             elif time_group == 'month':
                 # Premier jour du mois
                 periods.append(dt.date(current.year, current.month, 1))
@@ -7061,6 +8050,7 @@ def get_dashboard_chart_data():
             current = dt.datetime.combine(first_date, dt.time.min)
             # Commencer au premier jour du mois de la première date
             current = dt.datetime(current.year, current.month, 1)
+            now = dt.datetime.utcnow()
             while current <= now:
                 periods.append(dt.date(current.year, current.month, 1))
                 if current.month == 12:
@@ -7072,7 +8062,6 @@ def get_dashboard_chart_data():
             return jsonify({
                 'success': True,
                 'data': [],
-                'period': period,
                 'time_group': time_group
             })
     
@@ -7082,15 +8071,20 @@ def get_dashboard_chart_data():
         period_start = dt.datetime.combine(period_date, dt.time.min)
         if time_group == 'day':
             period_end = period_start + dt.timedelta(days=1)
+            period_label = period_date.strftime('%d/%m/%Y')
+        elif time_group == 'week':
+            period_end = period_start + dt.timedelta(days=7)
+            period_label = period_date.strftime('%d/%m/%Y')
         else:  # month
             if period_date.month == 12:
                 period_end = dt.datetime(period_date.year + 1, 1, 1)
             else:
                 period_end = dt.datetime(period_date.year, period_date.month + 1, 1)
+            period_label = period_date.strftime('%m/%Y')
         
         period_data = {
             'period': period_date.isoformat(),
-            'period_label': period_date.strftime('%d/%m/%Y') if time_group == 'day' else period_date.strftime('%m/%Y'),
+            'period_label': period_label,
             'metrics': {}
         }
         
@@ -7206,7 +8200,6 @@ def get_dashboard_chart_data():
     return jsonify({
         'success': True,
         'data': results,
-        'period': period,
         'time_group': time_group
     })
 
@@ -7216,6 +8209,109 @@ def get_dashboard_chart_data():
 def chat_full_page():
     """Page complète dédiée au chat et informations"""
     return render_template("chat_full.html")
+
+
+# Routes pour la gestion des fichiers Excel
+@app.route("/database-export/excel/upload", methods=["POST"])
+@admin_required
+def upload_excel_file():
+    """Uploader un fichier Excel"""
+    if 'file' not in request.files:
+        flash("Aucun fichier sélectionné", "danger")
+        return redirect(url_for("database_export"))
+    
+    file = request.files['file']
+    name = request.form.get('name', '').strip()
+    
+    if file.filename == '':
+        flash("Aucun fichier sélectionné", "danger")
+        return redirect(url_for("database_export"))
+    
+    if not name:
+        flash("Veuillez donner un nom au fichier", "danger")
+        return redirect(url_for("database_export"))
+    
+    # Vérifier l'extension
+    filename = file.filename
+    if '.' not in filename:
+        flash("Fichier invalide : extension manquante", "danger")
+        return redirect(url_for("database_export"))
+    
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext not in ALLOWED_EXCEL_EXTENSIONS:
+        flash(f"Format de fichier non autorisé. Formats acceptés : {', '.join(ALLOWED_EXCEL_EXTENSIONS)}", "danger")
+        return redirect(url_for("database_export"))
+    
+    try:
+        # Générer un nom de fichier unique
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename = secure_filename(filename)
+        unique_filename = f"{timestamp}_{safe_filename}"
+        file_path = EXCEL_FILES_FOLDER / unique_filename
+        
+        # Sauvegarder le fichier
+        file.save(str(file_path))
+        
+        # Créer l'entrée en base de données
+        excel_file = ExcelFile(
+            name=name,
+            filename=unique_filename,
+            original_filename=filename,
+            user_id=current_user.id
+        )
+        db.session.add(excel_file)
+        db.session.commit()
+        
+        flash(f"Fichier '{name}' uploadé avec succès", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de l'upload : {str(e)}", "danger")
+    
+    return redirect(url_for("database_export"))
+
+
+@app.route("/database-export/excel/<int:file_id>/download")
+@admin_required
+def download_excel_file(file_id):
+    """Télécharger un fichier Excel"""
+    excel_file = ExcelFile.query.get_or_404(file_id)
+    file_path = EXCEL_FILES_FOLDER / excel_file.filename
+    
+    if not file_path.exists():
+        flash("Fichier introuvable", "danger")
+        return redirect(url_for("database_export"))
+    
+    return send_from_directory(
+        str(EXCEL_FILES_FOLDER),
+        excel_file.filename,
+        as_attachment=True,
+        download_name=excel_file.original_filename
+    )
+
+
+@app.route("/database-export/excel/<int:file_id>/delete", methods=["POST"])
+@admin_required
+def delete_excel_file(file_id):
+    """Supprimer un fichier Excel"""
+    excel_file = ExcelFile.query.get_or_404(file_id)
+    file_path = EXCEL_FILES_FOLDER / excel_file.filename
+    
+    try:
+        # Supprimer le fichier du disque
+        if file_path.exists():
+            file_path.unlink()
+        
+        # Supprimer l'entrée en base de données
+        db.session.delete(excel_file)
+        db.session.commit()
+        
+        flash(f"Fichier '{excel_file.name}' supprimé avec succès", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de la suppression : {str(e)}", "danger")
+    
+    return redirect(url_for("database_export"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Relevé compteur{% endblock %}
+{% block title %}{{ t('Relevé compteurs') }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -115,16 +115,76 @@
       padding: 1rem;
     }
     
-    .table th, .table td {
-      padding: 0.375rem 0.125rem;
-      font-size: 0.8rem;
-    }
+  .table th, .table td {
+    padding: 0.375rem 0.125rem;
+    font-size: 0.8rem;
   }
+}
+
+/* Styles pour l'indentation hiérarchique */
+.hierarchy-indent {
+  display: inline-block;
+  width: 20px;
+}
+.hierarchy-line {
+  color: #adb5bd;
+  margin-right: 8px;
+  font-size: 1.1em;
+}
+.machine-row-level-0 {
+  background: linear-gradient(90deg, rgba(26, 59, 80, 0.05) 0%, rgba(26, 59, 80, 0.02) 100%) !important;
+  border-left: 2px solid rgba(26, 59, 80, 0.3);
+  font-weight: 600;
+}
+.machine-row-level-1 {
+  background: linear-gradient(90deg, rgba(108, 117, 125, 0.04) 0%, rgba(108, 117, 125, 0.01) 100%) !important;
+  border-left: 2px solid rgba(108, 117, 125, 0.2);
+}
+.machine-row-level-2 {
+  background: linear-gradient(90deg, rgba(173, 181, 189, 0.03) 0%, transparent 100%) !important;
+  border-left: 2px solid rgba(173, 181, 189, 0.15);
+}
+.machine-row-level-3 {
+  background-color: #ffffff !important;
+  border-left: 2px solid rgba(173, 181, 189, 0.1);
+}
+.counter-row {
+  background-color: #f8f9fa !important;
+  font-size: 0.95em;
+  border-left: 2px solid transparent;
+}
+.counter-row:hover {
+  background-color: #e9ecef !important;
+}
+.level-separator {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(222, 226, 230, 0.5), transparent);
+  border: none;
+}
+.machine-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background-color: rgba(26, 59, 80, 0.1);
+  color: #1a3b50;
+  font-size: 0.75em;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.counter-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background-color: rgba(108, 117, 125, 0.1);
+  color: #6c757d;
+  font-size: 0.7em;
+  margin-left: 6px;
+}
 </style>
 
 <div class="page-header">
   <div class="d-flex justify-content-between align-items-center">
-    <h1 class="page-title">Relevé des compteurs</h1>
+    <h1 class="page-title">{{ t('Relevé des compteurs') }}</h1>
   <button
     class="btn btn-outline-secondary"
     type="button"
@@ -133,7 +193,7 @@
     aria-expanded="false"
     aria-controls="counterHistory"
   >
-    Afficher l'historique
+    {{ t('Afficher l\'historique') }}
   </button>
 </div>
 
@@ -142,82 +202,93 @@
     <table class="table align-middle">
       <thead>
         <tr>
-          <th>Machine / Compteur</th>
-          <th>Code</th>
-          <th>Dernier relevé</th>
-          <th>Nouveau relevé</th>
+          <th>{{ t('Machine / Compteur') }}</th>
+          <th>{{ t('Code') }}</th>
+          <th>{{ t('Dernier relevé') }}</th>
+          <th>{{ t('Nouveau relevé') }}</th>
         </tr>
       </thead>
       <tbody>
-        {% for machine in machines %}
-        {% set unit = machine.counter_unit or 'h' %}
-        <tr>
-          <td>{{ machine.name }}</td>
-          <td>{{ machine.code }}</td>
-          <td>{{ "%.1f"|format(machine.hours) }} {{ unit }}</td>
-          <td style="max-width:160px;">
-            <input
-              class="form-control"
-              type="number"
-              min="{{ machine.hours }}"
-              step="0.1"
-              name="machine_{{ machine.id }}"
-              placeholder="Nouvelle valeur"
-            />
-          </td>
-        </tr>
-        {% endfor %}
-        {% if root_counters_by_machine %}
-        {% set current_root = None %}
-        {% for root_machine_counter, counter in root_counters_by_machine %}
-          {% if current_root != root_machine_counter %}
-            {% set current_root = root_machine_counter %}
+        {% set current_depth = -1 %}
+        {% for item in counter_hierarchy %}
+          {% set depth = item.depth %}
+          
+          {# Ajouter un séparateur visuel si on change de niveau (sauf pour le premier) #}
+          {% if current_depth != -1 and depth < current_depth %}
             <tr>
-              <td colspan="4" class="bg-light fw-bold pt-2 pb-1">Compteurs de {{ root_machine_counter.name }} (machine racine)</td>
+              <td colspan="4" class="level-separator"></td>
             </tr>
           {% endif %}
-          {% set unit = counter.unit or 'h' %}
-          <tr>
-            <td>{{ counter.name }}</td>
-            <td>{{ root_machine_counter.code }}</td>
-            <td>{{ "%.1f"|format(counter.value) }} {{ unit }}</td>
-            <td style="max-width:160px;">
-              <input
-                class="form-control"
-                type="number"
-                min="{{ counter.value }}"
-                step="0.1"
-                name="counter_{{ counter.id }}"
-                placeholder="Nouvelle valeur"
-              />
-            </td>
-          </tr>
+          {% set current_depth = depth %}
+          
+          {% if item.type == 'machine_with_counters' %}
+            {# Machine racine avec compteurs multiples - afficher le nom une seule fois #}
+            {% set machine = item.machine %}
+            {% set padding_left = depth * 30 %}
+            <tr class="machine-row-level-{{ depth if depth <= 3 else 3 }}">
+              <td style="padding: 14px; padding-left: {{ padding_left }}px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="color: #1a3b50; font-size: 1.15em; font-weight: 600;">{{ machine.name }}</span>
+                  <span class="machine-badge">{{ item.counters|length }} {% if item.counters|length > 1 %}{{ t('compteurs') }}{% else %}{{ t('compteur') }}{% endif %}</span>
+                </div>
+              </td>
+              <td style="padding: 14px; font-weight: 600; color: #1a3b50;">{{ machine.code }}</td>
+              <td colspan="2" style="padding: 14px; color: #6c757d; font-size: 0.9em;">
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                  <span><img src="{{ url_for('static', filename='icons/counter.svg') }}" alt="Relevé" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></span>
+                  <span>{{ t('Niveau') }} {{ depth }}</span>
+                </span>
+              </td>
+            </tr>
+            {# Afficher tous les compteurs de cette machine directement en dessous #}
+            {% for counter in item.counters %}
+              {% set unit = counter.unit or 'h' %}
+              <tr class="counter-row">
+                <td style="padding: 12px; padding-left: {{ padding_left + 35 }}px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="hierarchy-line">└─</span> 
+                    <span style="color: #1a3b50; font-weight: 500;">{{ counter.name }}</span>
+                    <span class="counter-badge">{{ machine.name }}</span>
+                  </div>
+                </td>
+                <td style="padding: 12px; color: #6c757d;">{{ machine.code }}</td>
+                <td style="padding: 12px; font-weight: 500;">{{ "%.1f"|format(counter.value) }} {{ unit }}</td>
+                <td style="padding: 12px; max-width:160px;">
+                  <input
+                    class="form-control"
+                    type="number"
+                    name="counter_{{ counter.id }}"
+                    placeholder="{{ t('Nouvelle valeur') }}"
+                  />
+                </td>
+              </tr>
+            {% endfor %}
+          {% elif item.type == 'machine_single_counter' %}
+            {# Machine avec compteur classique unique #}
+            {% set machine = item.machine %}
+            {% set unit = machine.counter_unit or 'h' %}
+            {% set padding_left = depth * 30 %}
+            <tr class="machine-row-level-{{ depth if depth <= 3 else 3 }}">
+              <td style="padding: 14px; padding-left: {{ padding_left }}px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  {% if depth > 0 %}<span class="hierarchy-line">└─</span>{% endif %}
+                  <span style="color: #1a3b50; font-size: {% if depth == 0 %}1.15em{% else %}1.05em{% endif %}; font-weight: 600;">{{ machine.name }}</span>
+                  <span class="counter-badge">{{ "%.1f"|format(machine.hours) }} {{ unit }}</span>
+                </div>
+              </td>
+              <td style="padding: 14px; {% if depth == 0 %}font-weight: 600; color: #1a3b50;{% else %}color: #6c757d;{% endif %}">{{ machine.code }}</td>
+              <td style="padding: 14px; font-weight: 500;">{{ "%.1f"|format(machine.hours) }} {{ unit }}</td>
+              <td style="padding: 14px; max-width:160px;">
+                <input
+                  class="form-control"
+                  type="number"
+                  name="machine_{{ machine.id }}"
+                  placeholder="Nouvelle valeur"
+                />
+              </td>
+            </tr>
+          {% endif %}
         {% endfor %}
-        {% elif root_counters %}
-        {% if root_machine %}
-        <tr>
-          <td colspan="4" class="bg-light fw-bold pt-2 pb-1">Compteurs de {{ root_machine.name }} (machine racine)</td>
-        </tr>
-        {% endif %}
-        {% for counter in root_counters %}
-        {% set unit = counter.unit or 'h' %}
-        <tr>
-          <td>{{ counter.name }}</td>
-          <td>{{ root_machine.code if root_machine else '' }}</td>
-          <td>{{ "%.1f"|format(counter.value) }} {{ unit }}</td>
-          <td style="max-width:160px;">
-            <input
-              class="form-control"
-              type="number"
-              min="{{ counter.value }}"
-              step="0.1"
-              name="counter_{{ counter.id }}"
-              placeholder="Nouvelle valeur"
-            />
-          </td>
-        </tr>
-        {% endfor %}
-        {% endif %}
       </tbody>
     </table>
   </div>

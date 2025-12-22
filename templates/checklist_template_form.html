@@ -143,13 +143,13 @@
         {% for item in template.items %}
         <div class="input-group mb-2 item-row">
           <input type="text" class="form-control" name="item_label" value="{{ item.label }}" placeholder="Libellé de l'élément" />
-          <button type="button" class="btn btn-outline-danger remove-item">🗑️</button>
+          <button type="button" class="btn btn-outline-danger remove-item"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
         </div>
         {% endfor %}
       {% else %}
         <div class="input-group mb-2 item-row">
           <input type="text" class="form-control" name="item_label" placeholder="Libellé de l'élément" />
-          <button type="button" class="btn btn-outline-danger remove-item">🗑️</button>
+          <button type="button" class="btn btn-outline-danger remove-item"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
         </div>
       {% endif %}
     </div>
@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', function() {
     row.className = 'input-group mb-2 item-row';
     row.innerHTML = `
       <input type="text" class="form-control" name="item_label" placeholder="Libellé de l'élément" />
-      <button type="button" class="btn btn-outline-danger remove-item">🗑️</button>
+      <button type="button" class="btn btn-outline-danger remove-item"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
     `;
     container.appendChild(row);
     

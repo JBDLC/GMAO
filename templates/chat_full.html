@@ -1,575 +1,36 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chat et Informations</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <style>
-  * {
-    font-family: 'Montserrat', sans-serif !important;
-  }
-  
-  html, body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-  
-  body {
-    padding-top: 0 !important;
-    margin: 0;
-    overflow: hidden;
-    background: #f5f7fa;
-  }
-  
-  .chat-full-page {
-    height: 100vh;
-    width: 100vw;
-    display: flex;
-    flex-direction: column;
-    background: #f5f7fa;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-  }
-  
-  .chat-full-header {
-    background: #1a3b50;
-    color: white;
-    padding: 24px 32px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    position: relative;
-    z-index: 1000;
-    flex-shrink: 0;
-  }
-  
-  .chat-full-header h1 {
-    margin: 0;
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: white !important;
-    position: relative;
-    z-index: 1001;
-  }
-  
-  .chat-full-header h1::before {
-    content: '';
-    width: 4px;
-    height: 32px;
-    background: #ffc107;
-    border-radius: 2px;
-  }
-  
-  .chat-full-close {
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    font-size: 24px;
-    cursor: pointer;
-    padding: 8px 16px;
-    border-radius: 12px;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    backdrop-filter: blur(10px);
-  }
-  
-  .chat-full-close:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: scale(1.05);
-    color: white;
-    text-decoration: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-  
-  .chat-full-filters {
-    background: #1a3b50;
-    padding: 16px 32px;
-    display: flex;
-    gap: 12px;
-    position: relative;
-    z-index: 999;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    flex-shrink: 0;
-  }
-  
-  .chat-full-filter-btn {
-    padding: 10px 20px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    transition: all 0.3s ease;
-  }
-  
-  .chat-full-filter-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.3);
-    color: white;
-  }
-  
-  .chat-full-filter-btn.active {
-    background: #ffc107;
-    color: #1a3b50;
-    border-color: #ffc107;
-    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
-  }
-  
-  .chat-full-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    max-width: 1400px;
-    margin: 0 auto;
-    width: 100%;
-    background: white;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
-  }
-  
-  .chat-full-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 32px;
-    background: #f8f9fa;
-    scroll-behavior: smooth;
-  }
-  
-  .chat-full-messages::-webkit-scrollbar {
-    width: 8px;
-  }
-  
-  .chat-full-messages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
-  }
-  
-  .chat-full-messages::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #1a3b50 0%, #2d5a7a 100%);
-    border-radius: 10px;
-  }
-  
-  .chat-full-messages::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #03192f 0%, #1a3b50 100%);
-  }
-  
-  .chat-full-input-area {
-    padding: 24px 32px;
-    background: white;
-    border-top: 2px solid #e8e8e8;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
-  }
-  
-  .chat-full-input-form {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    max-width: 100%;
-  }
-  
-  .chat-full-add-report-btn {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: #ffc107;
-    color: #1a3b50 !important;
-    border: none;
-    cursor: pointer;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    font-size: 32px;
-    font-weight: bold;
-    line-height: 1;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
-    padding: 0;
-    margin: 0;
-    flex-shrink: 0;
-  }
-  
-  .chat-full-add-report-btn:hover {
-    transform: scale(1.1) rotate(90deg);
-    box-shadow: 0 6px 16px rgba(255, 193, 7, 0.5);
-    background: #ffca2c;
-    color: #03192f !important;
-  }
-  
-  .chat-full-input {
-    flex: 1;
-    padding: 16px 20px;
-    border: 2px solid #e0e0e0;
-    border-radius: 28px;
-    font-size: 15px;
-    transition: all 0.3s ease;
-    background: #f8f9fa;
-  }
-  
-  .chat-full-input:focus {
-    outline: none;
-    border-color: #1a3b50;
-    background: white;
-    box-shadow: 0 0 0 4px rgba(26, 59, 80, 0.1);
-  }
-  
-  .chat-full-send-btn {
-    padding: 16px 32px;
-    background: #1a3b50;
-    color: white;
-    border: none;
-    border-radius: 28px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 15px;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(26, 59, 80, 0.3);
-  }
-  
-  .chat-full-send-btn:hover {
-    background: #03192f;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(26, 59, 80, 0.4);
-  }
-  
-  .chat-full-send-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-  
-  /* Reprendre les styles des messages depuis base.html */
-  .chat-message {
-    margin-bottom: 16px;
-    padding: 12px;
-    background: white;
-    border-radius: 8px;
-    border-left: 4px solid #1a3b50;
-    position: relative;
-  }
-  
-  .chat-message.auto {
-    border-left-color: #0d6efd;
-    background: white;
-  }
-  
-  .chat-message.report {
-    border-left-color: #ff9800;
-    background: white;
-  }
-  
-  .chat-message.report.own {
-    background: #fff8e1;
-    border-left-color: #ff9800;
-  }
-  
-  .chat-message.own {
-    background: #e3f2fd;
-    border-left-color: #2196f3;
-  }
-  
-  .chat-message-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    font-size: 14px;
-  }
-  
-  .chat-message-user {
-    font-weight: 700;
-    color: #1a3b50;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .chat-message-user::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    background: #1a3b50;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 8px;
-  }
-  
-  .chat-message-date {
-    color: #6c757d;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 500;
-  }
-  
-  .chat-message-edited {
-    font-style: italic;
-    font-size: 11px;
-    color: #999;
-    margin-left: 4px;
-  }
-  
-  .chat-message-content {
-    color: #2c3e50;
-    line-height: 1.7;
-    margin-bottom: 8px;
-    white-space: pre-wrap;
-    font-size: 15px;
-  }
-  
-  .chat-message-reply {
-    border-left: 4px solid #1a3b50;
-    padding: 12px 16px;
-    margin-bottom: 12px;
-    background: #f0f4f8;
-    border-radius: 12px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  }
-  
-  .chat-message-reply:hover {
-    background: #e8edf2;
-    transform: translateX(4px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-  
-  .chat-message-reply-user {
-    font-weight: 700;
-    color: #1a3b50;
-    margin-bottom: 4px;
-    font-size: 13px;
-  }
-  
-  .chat-message-reply-content {
-    color: #555;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-  }
-  
-  .chat-message-header-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .chat-message-actions {
-    display: none;
-    gap: 4px;
-  }
-  
-  .chat-message:hover .chat-message-actions {
-    display: flex;
-  }
-  
-  .chat-message-action-btn {
-    background: rgba(26, 59, 80, 0.1);
-    border: none;
-    border-radius: 8px;
-    padding: 6px 10px;
-    cursor: pointer;
-    font-size: 14px;
-    color: #1a3b50;
-    transition: all 0.3s ease;
-    line-height: 1;
-    font-weight: 500;
-  }
-  
-  .chat-message-action-btn:hover {
-    background: rgba(26, 59, 80, 0.2);
-    transform: scale(1.1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  }
-  
-  .chat-message-link {
-    color: #0d6efd;
-    text-decoration: none;
-    font-size: 13px;
-  }
-  
-  .chat-message-link:hover {
-    text-decoration: underline;
-  }
-  
-  .chat-reply-preview {
-    background: #e3f2fd;
-    padding: 16px 20px;
-    margin-bottom: 16px;
-    border-radius: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border: 2px solid #2196f3;
-    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
-    animation: slideDown 0.3s ease;
-  }
-  
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  .chat-reply-preview-content {
-    flex: 1;
-  }
-  
-  .chat-reply-preview-user {
-    font-weight: 600;
-    color: #1a3b50;
-    font-size: 12px;
-    margin-bottom: 4px;
-  }
-  
-  .chat-reply-preview-text {
-    color: #666;
-    font-size: 13px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  
-  .chat-reply-preview-close {
-    background: transparent;
-    border: none;
-    color: #666;
-    cursor: pointer;
-    font-size: 20px;
-    padding: 0;
-    margin-left: 12px;
-    line-height: 1;
-  }
-  
-  .chat-reply-preview-close:hover {
-    color: #333;
-  }
-  
-  .chat-report-photos {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-    margin-top: 16px;
-  }
-  
-  .chat-report-photo {
-    width: 100%;
-    height: 140px;
-    object-fit: cover;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-  
-  .chat-report-photo:hover {
-    transform: scale(1.05) translateY(-4px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-    border-radius: 16px;
-  }
-  
-  @media (max-width: 768px) {
-    .chat-full-header {
-      padding: 20px;
-    }
-    
-    .chat-full-header h1 {
-      font-size: 22px;
-    }
-    
-    .chat-full-filters {
-      padding: 12px 20px;
-      flex-wrap: wrap;
-    }
-    
-    .chat-full-filter-btn {
-      padding: 8px 16px;
-      font-size: 13px;
-    }
-    
-    .chat-full-messages {
-      padding: 20px;
-    }
-    
-    .chat-full-input-area {
-      padding: 16px 20px;
-    }
-    
-    .chat-full-add-report-btn {
-      width: 48px;
-      height: 48px;
-      font-size: 28px;
-    }
-    
-    .chat-full-input {
-      padding: 12px 16px;
-      font-size: 14px;
-    }
-    
-    .chat-full-send-btn {
-      padding: 12px 24px;
-      font-size: 14px;
-    }
-  }
-</style>
+{% extends "base.html" %}
 
-<div class="chat-full-page">
-  <div class="chat-full-header">
-    <h1>Chat et Informations</h1>
-    <a href="{{ url_for('index') }}" class="chat-full-close" title="Fermer">×</a>
-  </div>
-  
-  <div class="chat-full-filters">
-    <button class="chat-full-filter-btn active" data-filter="all" id="filter-all">Tous</button>
-    <button class="chat-full-filter-btn" data-filter="manual" id="filter-manual">Messages</button>
-    <button class="chat-full-filter-btn" data-filter="auto" id="filter-auto">Système</button>
-    <button class="chat-full-filter-btn" data-filter="report" id="filter-report">Rapport</button>
-  </div>
-  
-  <div class="chat-full-container">
-    <div class="chat-full-messages" id="chat-messages">
+{% block title %}{{ t('Chat et Informations') }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">{{ t('Chat et Informations') }}</h1>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <!-- Filtres -->
+    <div class="chat-filters p-3 border-bottom">
+      <button class="chat-filter-btn active" data-filter="all" id="filter-all">{{ t('Tous') }}</button>
+      <button class="chat-filter-btn" data-filter="manual" id="filter-manual">{{ t('Messages') }}</button>
+      <button class="chat-filter-btn" data-filter="auto" id="filter-auto">{{ t('Système') }}</button>
+      <button class="chat-filter-btn" data-filter="report" id="filter-report">{{ t('Rapport') }}</button>
+    </div>
+    
+    <!-- Messages -->
+    <div class="chat-messages" id="chat-messages" style="min-height: 400px; max-height: 600px; overflow-y: auto; padding: 1rem;">
       <!-- Messages will be loaded here -->
     </div>
     
-    <div class="chat-full-input-area" id="chat-input-area">
+    <!-- Zone de saisie -->
+    <div class="chat-input-area p-3 border-top" id="chat-input-area">
       <div id="chat-reply-preview" style="display: none;"></div>
-      <form class="chat-full-input-form" id="chat-form">
-        <button type="button" class="chat-full-add-report-btn" id="chat-add-report-btn" title="Créer un rapport">
+      <form class="chat-input-form d-flex gap-2 align-items-center" id="chat-form">
+        <button type="button" class="chat-add-report-btn-input" id="chat-add-report-btn" title="{{ t('Créer un rapport') }}">
           +
         </button>
-        <input type="text" class="chat-full-input" id="chat-input" placeholder="Tapez votre message..." required>
-        <button type="submit" class="chat-full-send-btn" id="chat-send-btn">Envoyer</button>
+        <input type="text" class="form-control chat-input" id="chat-input" placeholder="{{ t('Tapez votre message...') }}" required>
+        <button type="submit" class="btn btn-primary-fms" id="chat-send-btn">{{ t('Envoyer') }}</button>
       </form>
     </div>
   </div>
@@ -580,188 +41,226 @@
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="reportModalTitle">Créer un rapport</h5>
+        <h5 class="modal-title" id="reportModalTitle">{{ t('Créer un rapport') }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <form id="report-form">
           <input type="hidden" id="report-id" name="report_id">
           <div class="mb-3">
-            <label for="report-content" class="form-label">Contenu du rapport</label>
-            <textarea class="form-control" id="report-content" name="content" rows="6" placeholder="Rédigez votre rapport de poste/jour..."></textarea>
+            <label for="report-content" class="form-label">{{ t('Contenu du rapport') }}</label>
+            <textarea class="form-control" id="report-content" name="content" rows="6" required placeholder="{{ t('Décrivez votre rapport de poste/jour...') }}"></textarea>
           </div>
           <div class="mb-3">
-            <label for="report-photos" class="form-label">Photos (optionnel)</label>
+            <label for="report-photos" class="form-label">{{ t('Photos (optionnel)') }}</label>
             <input type="file" class="form-control" id="report-photos" name="photos" multiple accept="image/*">
-            <div id="report-photos-preview" class="mt-2"></div>
+            <small class="form-text text-muted">{{ t('Vous pouvez sélectionner plusieurs photos') }}</small>
           </div>
-          <div id="report-existing-photos"></div>
+          <div id="report-photos-preview" class="mb-3"></div>
+          <div id="report-existing-photos" class="mb-3"></div>
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-        <button type="button" class="btn btn-primary" id="report-submit-btn">Enregistrer</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('Annuler') }}</button>
+        <button type="button" class="btn btn-primary" id="report-submit-btn">{{ t('Enregistrer') }}</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Modal pour afficher les photos -->
+<!-- Modal pour afficher une photo en grand -->
 <div class="modal fade" id="photoModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Photo</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body text-center">
-        <img id="photoModalImage" src="" alt="Photo" style="max-width: 100%; height: auto;">
+        <img id="photo-modal-img" src="" alt="Photo" style="max-width: 100%; max-height: 80vh;">
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}
 <script>
-  // Reprendre tout le JavaScript du chat depuis base.html
-  // Je vais inclure le script complet ici
+  // Chat translations
+  const chatTranslations = {
+    'Tapez votre message...': '{{ t("Tapez votre message...") }}',
+    'Envoyer': '{{ t("Envoyer") }}',
+    'Modifier': '{{ t("Modifier") }}',
+    'Modifier le message...': '{{ t("Modifier le message...") }}',
+    'Répondre à': '{{ t("Répondre à") }}',
+    'Aucun message': '{{ t("Aucun message") }}',
+    'Aucun message écrit': '{{ t("Aucun message écrit") }}',
+    'Aucun message système': '{{ t("Aucun message système") }}',
+    'Aucun rapport': '{{ t("Aucun rapport") }}',
+    'Créer un rapport': '{{ t("Créer un rapport") }}',
+    'Modifier le rapport': '{{ t("Modifier le rapport") }}',
+    'Supprimer': '{{ t("Supprimer") }}',
+    'Répondre': '{{ t("Répondre") }}',
+    'Êtes-vous sûr de vouloir supprimer ce rapport ?': '{{ t("Êtes-vous sûr de vouloir supprimer ce rapport ?") }}',
+    'Êtes-vous sûr de vouloir supprimer ce message ?': '{{ t("Êtes-vous sûr de vouloir supprimer ce message ?") }}',
+    'Impossible de modifier le rapport': '{{ t("Impossible de modifier le rapport") }}',
+    'Impossible de supprimer le rapport': '{{ t("Impossible de supprimer le rapport") }}',
+    'Impossible de supprimer le message': '{{ t("Impossible de supprimer le message") }}',
+    'Impossible de modifier le message': '{{ t("Impossible de modifier le message") }}',
+    'Impossible d\'envoyer le message': '{{ t("Impossible d\'envoyer le message") }}',
+    'Erreur': '{{ t("Erreur") }}'
+  };
+  
+  // Chat functionality
   (function() {
-    let isOpen = true; // Toujours ouvert sur cette page
-    let refreshInterval = null;
-    let lastMessageId = 0;
-    let currentFilter = 'all';
-    let lastMessagesHash = '';
-    let replyingTo = null;
-    let editingMessageId = null;
-    let editingReportId = null;
-    
-    const chatReplyPreview = document.getElementById('chat-reply-preview');
-    const chatMessages = document.getElementById('chat-messages');
-    const chatInputArea = document.getElementById('chat-input-area');
-    const chatForm = document.getElementById('chat-form');
-    const chatInput = document.getElementById('chat-input');
-    const chatSendBtn = document.getElementById('chat-send-btn');
-    const chatAddReportBtn = document.getElementById('chat-add-report-btn');
-    const reportModalEl = document.getElementById('reportModal');
-    const photoModalEl = document.getElementById('photoModal');
-    let reportModal = null;
-    let photoModal = null;
-    
-    // Initialiser les modales
-    if (typeof bootstrap !== 'undefined' && reportModalEl) {
-      reportModal = new bootstrap.Modal(reportModalEl);
-    }
-    if (typeof bootstrap !== 'undefined' && photoModalEl) {
-      photoModal = new bootstrap.Modal(photoModalEl);
+    // Attendre que le DOM soit complètement chargé
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initChat);
+    } else {
+      // DOM déjà chargé
+      initChat();
     }
     
-    // Filter buttons
-    const filterButtons = document.querySelectorAll('.chat-full-filter-btn');
-    filterButtons.forEach(btn => {
-      btn.addEventListener('click', function() {
-        filterButtons.forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-        currentFilter = this.getAttribute('data-filter');
-        loadMessages();
-      });
-    });
+    function initChat() {
+      const chatMessages = document.getElementById('chat-messages');
+      const chatForm = document.getElementById('chat-form');
+      const chatInput = document.getElementById('chat-input');
+      const chatSendBtn = document.getElementById('chat-send-btn');
+      
+      if (!chatMessages || !chatForm || !chatInput) {
+        console.error('Chat elements not found');
+        return;
+      }
+      
+      let refreshInterval = null;
+      let lastMessageId = 0;
+      let currentFilter = 'all';
+      let lastMessagesHash = '';
+      let replyingTo = null;
+      let editingMessageId = null;
+      let editingReportId = null;
+      const chatReplyPreview = document.getElementById('chat-reply-preview');
+      const chatInputArea = document.getElementById('chat-input-area');
+      const chatAddReportBtn = document.getElementById('chat-add-report-btn');
+      const reportModalEl = document.getElementById('reportModal');
+      const photoModalEl = document.getElementById('photoModal');
+      let reportModal = null;
+      let photoModal = null;
+      
+      // Initialiser les modales après le chargement de Bootstrap
+      if (typeof bootstrap !== 'undefined' && reportModalEl) {
+        reportModal = new bootstrap.Modal(reportModalEl);
+      }
+      if (typeof bootstrap !== 'undefined' && photoModalEl) {
+        photoModal = new bootstrap.Modal(photoModalEl);
+      }
     
-    // Add report button
-    if (chatAddReportBtn) {
-      chatAddReportBtn.addEventListener('click', function() {
-        editingReportId = null;
-        const reportModalTitle = document.getElementById('reportModalTitle');
-        const reportForm = document.getElementById('report-form');
-        if (reportModalTitle) reportModalTitle.textContent = 'Créer un rapport';
-        if (reportForm) reportForm.reset();
-        const reportId = document.getElementById('report-id');
-        if (reportId) reportId.value = '';
-        const photosPreview = document.getElementById('report-photos-preview');
-        if (photosPreview) photosPreview.innerHTML = '';
-        const existingPhotos = document.getElementById('report-existing-photos');
-        if (existingPhotos) existingPhotos.innerHTML = '';
-        if (reportModal) reportModal.show();
-      });
-    }
-    
-    // Photo preview
-    const reportPhotosInput = document.getElementById('report-photos');
-    if (reportPhotosInput) {
-      reportPhotosInput.addEventListener('change', function(e) {
-        const preview = document.getElementById('report-photos-preview');
-        preview.innerHTML = '';
-        Array.from(e.target.files).forEach(file => {
-          if (file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-              const img = document.createElement('img');
-              img.src = e.target.result;
-              img.style.width = '120px';
-              img.style.height = '120px';
-              img.style.objectFit = 'cover';
-              img.style.borderRadius = '4px';
-              img.style.marginRight = '8px';
-              img.style.marginBottom = '8px';
-              preview.appendChild(img);
-            };
-            reader.readAsDataURL(file);
-          }
+      // Filter buttons
+      const filterButtons = document.querySelectorAll('.chat-filter-btn');
+      filterButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+          filterButtons.forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          currentFilter = this.getAttribute('data-filter');
+          loadMessages();
         });
       });
-    }
-    
-    // Submit report
-    const reportSubmitBtn = document.getElementById('report-submit-btn');
-    if (reportSubmitBtn) {
-      reportSubmitBtn.addEventListener('click', function() {
-        const form = document.getElementById('report-form');
-        const formData = new FormData(form);
-        
-        if (editingReportId) {
-          formData.append('report_id', editingReportId);
-          fetch(`/reports/${editingReportId}`, {
-            method: 'PUT',
-            body: formData
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              if (reportModal) reportModal.hide();
-              lastMessagesHash = '';
-              loadMessages();
-            } else {
-              alert('Erreur : ' + (data.error || 'Impossible de modifier le rapport'));
+      
+      // Add report button
+      if (chatAddReportBtn) {
+        chatAddReportBtn.addEventListener('click', function() {
+          editingReportId = null;
+          const reportModalTitle = document.getElementById('reportModalTitle');
+          const reportForm = document.getElementById('report-form');
+          if (reportModalTitle) reportModalTitle.textContent = chatTranslations['Créer un rapport'];
+          if (reportForm) reportForm.reset();
+          const reportId = document.getElementById('report-id');
+          if (reportId) reportId.value = '';
+          const photosPreview = document.getElementById('report-photos-preview');
+          if (photosPreview) photosPreview.innerHTML = '';
+          const existingPhotos = document.getElementById('report-existing-photos');
+          if (existingPhotos) existingPhotos.innerHTML = '';
+          if (reportModal) reportModal.show();
+        });
+      }
+      
+      // Photo preview
+      const reportPhotosInput = document.getElementById('report-photos');
+      if (reportPhotosInput) {
+        reportPhotosInput.addEventListener('change', function(e) {
+          const preview = document.getElementById('report-photos-preview');
+          preview.innerHTML = '';
+          Array.from(e.target.files).forEach(file => {
+            if (file.type.startsWith('image/')) {
+              const reader = new FileReader();
+              reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.style.width = '120px';
+                img.style.height = '120px';
+                img.style.objectFit = 'cover';
+                img.style.borderRadius = '4px';
+                img.style.marginRight = '8px';
+                img.style.marginBottom = '8px';
+                preview.appendChild(img);
+              };
+              reader.readAsDataURL(file);
             }
-          })
-          .catch(error => {
-            console.error('Erreur:', error);
-            alert('Erreur lors de la modification du rapport');
           });
-        } else {
-          fetch('/reports', {
-            method: 'POST',
-            body: formData
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              if (reportModal) reportModal.hide();
-              lastMessagesHash = '';
-              loadMessages();
-            } else {
-              alert('Erreur : ' + (data.error || 'Impossible de créer le rapport'));
-            }
-          })
-          .catch(error => {
-            console.error('Erreur:', error);
-            alert('Erreur lors de la création du rapport');
-          });
-        }
-      });
-    }
-    
-    // Edit report function
-    window.editReport = function(reportId) {
+        });
+      }
+      
+      // Submit report
+      const reportSubmitBtn = document.getElementById('report-submit-btn');
+      if (reportSubmitBtn) {
+        reportSubmitBtn.addEventListener('click', function() {
+          const form = document.getElementById('report-form');
+          const formData = new FormData(form);
+          
+          if (editingReportId) {
+            formData.append('report_id', editingReportId);
+            fetch(`/reports/${editingReportId}`, {
+              method: 'PUT',
+              body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                if (reportModal) reportModal.hide();
+                lastMessagesHash = '';
+                loadMessages();
+              } else {
+                alert(chatTranslations['Erreur'] + ' : ' + (data.error || chatTranslations['Impossible de modifier le rapport']));
+              }
+            })
+            .catch(error => {
+              console.error('Erreur:', error);
+              alert('Erreur lors de la modification du rapport');
+            });
+          } else {
+            fetch('/reports', {
+              method: 'POST',
+              body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                if (reportModal) reportModal.hide();
+                lastMessagesHash = '';
+                loadMessages();
+              } else {
+                alert(chatTranslations['Erreur'] + ' : ' + (data.error || chatTranslations['Impossible de modifier le rapport']));
+              }
+            })
+            .catch(error => {
+              console.error('Erreur:', error);
+              alert('Erreur lors de la création du rapport');
+            });
+          }
+        });
+      }
+      
+      // Edit report function
+      window.editReport = function(reportId) {
       fetch('/reports')
         .then(response => response.json())
         .then(data => {
@@ -775,7 +274,7 @@
               const photosPreview = document.getElementById('report-photos-preview');
               const existingPhotosDiv = document.getElementById('report-existing-photos');
               
-              if (reportModalTitle) reportModalTitle.textContent = 'Modifier le rapport';
+              if (reportModalTitle) reportModalTitle.textContent = chatTranslations['Modifier le rapport'];
               if (reportContent) reportContent.value = report.content;
               if (reportIdInput) reportIdInput.value = report.id;
               if (photosPreview) photosPreview.innerHTML = '';
@@ -804,7 +303,7 @@
                   
                   const label = document.createElement('label');
                   label.htmlFor = `photo-${photo.id}`;
-                  label.textContent = 'Supprimer';
+                  label.textContent = chatTranslations['Supprimer'];
                   label.style.cursor = 'pointer';
                   
                   photoDiv.appendChild(img);
@@ -824,93 +323,45 @@
         });
     };
     
-    // Delete report function
-    window.deleteReport = function(reportId) {
-      if (confirm('Êtes-vous sûr de vouloir supprimer ce rapport ?')) {
-        fetch(`/reports/${reportId}`, {
-          method: 'DELETE'
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            lastMessagesHash = '';
-            loadMessages();
-          } else {
-            alert('Erreur : ' + (data.error || 'Impossible de supprimer le rapport'));
-          }
-        })
-        .catch(error => {
-          console.error('Erreur:', error);
-          alert('Erreur lors de la suppression du rapport');
-        });
+      // Delete report function
+      window.deleteReport = function(reportId) {
+        if (confirm(chatTranslations['Êtes-vous sûr de vouloir supprimer ce rapport ?'])) {
+          fetch(`/reports/${reportId}`, {
+            method: 'DELETE'
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              lastMessagesHash = '';
+              loadMessages();
+            } else {
+              alert(chatTranslations['Erreur'] + ' : ' + (data.error || chatTranslations['Impossible de supprimer le rapport']));
+            }
+          })
+          .catch(error => {
+            console.error('Erreur:', error);
+            alert('Erreur lors de la suppression du rapport');
+          });
+        }
+      };
+      
+      // Cancel reply
+      function cancelReply() {
+        replyingTo = null;
+        chatReplyPreview.style.display = 'none';
+        chatInput.placeholder = chatTranslations['Tapez votre message...'];
       }
-    };
-    
-    // Load messages
-    function loadMessages() {
-      fetch('/chat/messages')
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            // Charger aussi les rapports
-            fetch('/reports')
-              .then(response => response.json())
-              .then(reportData => {
-                let allItems = [];
-                
-                if (reportData.success) {
-                  const reportMessages = reportData.reports.map(report => ({
-                    id: 'report_' + report.id,
-                    type: 'report',
-                    user_name: report.user_name,
-                    content: report.content,
-                    date: new Date(report.created_at).toLocaleDateString('fr-FR'),
-                    time: new Date(report.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-                    edited: report.edited_at ? true : false,
-                    is_own: report.is_own,
-                    photos: report.photos || [],
-                    report_id: report.id,
-                    created_at: report.created_at
-                  }));
-                  
-                  allItems = [...data.messages, ...reportMessages];
-                } else {
-                  allItems = data.messages;
-                }
-                
-                // Trier par date (plus ancien en premier)
-                allItems.sort((a, b) => {
-                  const dateA = a.created_at ? new Date(a.created_at) : new Date(a.date + ' ' + a.time);
-                  const dateB = b.created_at ? new Date(b.created_at) : new Date(b.date + ' ' + b.time);
-                  return dateA - dateB;
-                });
-                
-                // Filter items
-                let filteredItems = allItems;
-                if (currentFilter === 'manual') {
-                  filteredItems = allItems.filter(item => item.type === 'manual');
-                } else if (currentFilter === 'auto') {
-                  filteredItems = allItems.filter(item => item.type === 'auto');
-                } else if (currentFilter === 'report') {
-                  filteredItems = allItems.filter(item => item.type === 'report');
-                }
-                
-                renderAllItems(filteredItems);
-              })
-              .catch(error => {
-                console.error('Error loading reports:', error);
-                let filteredMessages = data.messages;
-                if (currentFilter === 'manual') {
-                  filteredMessages = data.messages.filter(msg => msg.type === 'manual');
-                } else if (currentFilter === 'auto') {
-                  filteredMessages = data.messages.filter(msg => msg.type === 'auto');
-                } else if (currentFilter === 'report') {
-                  filteredMessages = [];
-                }
-                renderAllItems(filteredMessages);
-              });
-            
-            function renderAllItems(items) {
+      
+      // Cancel edit
+      function cancelEdit() {
+        editingMessageId = null;
+        chatInput.value = '';
+        chatInput.placeholder = chatTranslations['Tapez votre message...'];
+        chatSendBtn.textContent = chatTranslations['Envoyer'];
+      }
+      
+      // Render functions - définies avant loadMessages pour être accessibles
+      function renderAllItems(items) {
               const itemsHash = JSON.stringify(items.map(item => ({
                 id: item.id || item.report_id,
                 type: item.type,
@@ -940,12 +391,12 @@
                   emptyDiv.style.textAlign = 'center';
                   emptyDiv.style.color = '#6c757d';
                   emptyDiv.textContent = currentFilter === 'all' 
-                    ? 'Aucun message' 
+                    ? chatTranslations['Aucun message'] 
                     : currentFilter === 'manual' 
-                      ? 'Aucun message écrit' 
+                      ? chatTranslations['Aucun message écrit'] 
                       : currentFilter === 'auto'
-                        ? 'Aucun message système'
-                        : 'Aucun rapport';
+                        ? chatTranslations['Aucun message système']
+                        : chatTranslations['Aucun rapport'];
                   chatMessages.appendChild(emptyDiv);
                 } else {
                   items.forEach(item => {
@@ -1010,13 +461,13 @@
                 
                 if (msg.is_own) {
                   actionsDiv.innerHTML = `
-                    <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="Répondre">↩</button>
-                    <button class="chat-message-action-btn" onclick="editMessage(${msg.id}, '${msg.content.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" title="Modifier">✏</button>
-                    <button class="chat-message-action-btn" onclick="deleteMessage(${msg.id})" title="Supprimer">🗑</button>
+                    <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
+                    <button class="chat-message-action-btn" onclick="editMessage(${msg.id}, '${msg.content.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
+                    <button class="chat-message-action-btn" onclick="deleteMessage(${msg.id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
                   `;
                 } else {
                   actionsDiv.innerHTML = `
-                    <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="Répondre">↩</button>
+                    <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
                   `;
                 }
                 headerRight.appendChild(actionsDiv);
@@ -1072,8 +523,8 @@
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'chat-message-actions';
                 actionsDiv.innerHTML = `
-                  <button class="chat-message-action-btn" onclick="editReport(${report.report_id})" title="Modifier">✏</button>
-                  <button class="chat-message-action-btn" onclick="deleteReport(${report.report_id})" title="Supprimer">🗑</button>
+                  <button class="chat-message-action-btn" onclick="editReport(${report.report_id})" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
+                  <button class="chat-message-action-btn" onclick="deleteReport(${report.report_id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
                 `;
                 headerRight.appendChild(actionsDiv);
               }
@@ -1111,7 +562,7 @@
                   img.style.cursor = 'pointer';
                   img.addEventListener('click', function() {
                     if (photoModalEl) {
-                      const photoModalImg = photoModalEl.querySelector('#photoModalImage');
+                      const photoModalImg = photoModalEl.querySelector('#photo-modal-img');
                       if (photoModalImg) {
                         photoModalImg.src = photo.url;
                         if (photoModal) photoModal.show();
@@ -1126,182 +577,222 @@
               
               chatMessages.appendChild(messageDiv);
             }
+      
+      // Load messages
+      function loadMessages() {
+        fetch('/chat/messages')
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              fetch('/reports')
+                .then(response => response.json())
+                .then(reportData => {
+                  let allItems = [];
+                  
+                  if (reportData.success) {
+                    const reportMessages = reportData.reports.map(report => ({
+                      id: 'report_' + report.id,
+                      type: 'report',
+                      user_name: report.user_name,
+                      content: report.content,
+                      date: new Date(report.created_at).toLocaleDateString('fr-FR'),
+                      time: new Date(report.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                      edited: report.edited_at ? true : false,
+                      is_own: report.is_own,
+                      photos: report.photos || [],
+                      report_id: report.id,
+                      created_at: report.created_at
+                    }));
+                    
+                    allItems = [...data.messages, ...reportMessages];
+                  } else {
+                    allItems = data.messages;
+                  }
+                  
+                  allItems.sort((a, b) => {
+                    const dateA = a.created_at ? new Date(a.created_at) : new Date(a.date + ' ' + a.time);
+                    const dateB = b.created_at ? new Date(b.created_at) : new Date(b.date + ' ' + b.time);
+                    return dateA - dateB;
+                  });
+                  
+                  let filteredItems = allItems;
+                  if (currentFilter === 'manual') {
+                    filteredItems = allItems.filter(item => item.type === 'manual');
+                  } else if (currentFilter === 'auto') {
+                    filteredItems = allItems.filter(item => item.type === 'auto');
+                  } else if (currentFilter === 'report') {
+                    filteredItems = allItems.filter(item => item.type === 'report');
+                  }
+                  
+                  renderAllItems(filteredItems);
+                })
+                .catch(error => {
+                  console.error('Error loading reports:', error);
+                  let filteredMessages = data.messages;
+                  if (currentFilter === 'manual') {
+                    filteredMessages = data.messages.filter(msg => msg.type === 'manual');
+                  } else if (currentFilter === 'auto') {
+                    filteredMessages = data.messages.filter(msg => msg.type === 'auto');
+                  } else if (currentFilter === 'report') {
+                    filteredMessages = [];
+                  }
+                  renderAllItems(filteredMessages);
+                });
+            }
+          })
+          .catch(error => {
+            console.error('Error loading messages:', error);
+          });
+      }
+      
+      // Reply to message
+      window.replyToMessage = function(messageId) {
+        const messageDiv = chatMessages.querySelector(`[data-message-id="${messageId}"]`);
+        if (messageDiv) {
+          const content = messageDiv.querySelector('.chat-message-content').textContent;
+          const userName = messageDiv.querySelector('.chat-message-user').textContent;
+          replyingTo = { id: messageId, content: content, user_name: userName };
+          
+          chatReplyPreview.innerHTML = `
+            <div class="chat-reply-preview-content">
+              <div class="chat-reply-preview-user">${userName}</div>
+              <div class="chat-reply-preview-text">${content.length > 50 ? content.substring(0, 50) + '...' : content}</div>
+            </div>
+            <button class="chat-reply-preview-close" onclick="cancelReply()">×</button>
+          `;
+          chatReplyPreview.style.display = 'block';
+          chatInput.placeholder = chatTranslations['Répondre à'] + ' ' + userName + '...';
+          chatInput.focus();
+          cancelEdit();
+        }
+      };
+      
+      // Edit message
+      window.editMessage = function(messageId, currentContent) {
+        editingMessageId = messageId;
+        chatInput.value = currentContent;
+        chatInput.placeholder = chatTranslations['Modifier le message...'];
+        chatSendBtn.textContent = chatTranslations['Modifier'];
+        cancelReply();
+        chatInput.focus();
+      };
+      
+      // Delete message
+      window.deleteMessage = function(messageId) {
+        if (!confirm(chatTranslations['Êtes-vous sûr de vouloir supprimer ce message ?'])) return;
+        
+        fetch(`/chat/${messageId}/delete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            lastMessagesHash = '';
+            loadMessages();
+          } else {
+            alert(chatTranslations['Erreur'] + ': ' + (data.error || chatTranslations['Impossible de supprimer le message']));
           }
         })
         .catch(error => {
-          console.error('Error loading messages:', error);
+          console.error('Error deleting message:', error);
+          alert('Erreur lors de la suppression du message');
         });
-    }
-    
-    // Reply to message
-    window.replyToMessage = function(messageId) {
-      const messageDiv = chatMessages.querySelector(`[data-message-id="${messageId}"]`);
-      if (messageDiv) {
-        const content = messageDiv.querySelector('.chat-message-content').textContent;
-        const userName = messageDiv.querySelector('.chat-message-user').textContent;
-        replyingTo = { id: messageId, content: content, user_name: userName };
-        
-        chatReplyPreview.innerHTML = `
-          <div class="chat-reply-preview-content">
-            <div class="chat-reply-preview-user">${userName}</div>
-            <div class="chat-reply-preview-text">${content.length > 50 ? content.substring(0, 50) + '...' : content}</div>
-          </div>
-          <button class="chat-reply-preview-close" onclick="cancelReply()">×</button>
-        `;
-        chatReplyPreview.style.display = 'block';
-        chatInput.placeholder = 'Répondre à ' + userName + '...';
-        chatInput.focus();
-        cancelEdit();
-      }
-    };
-    
-    // Cancel reply
-    function cancelReply() {
-      replyingTo = null;
-      chatReplyPreview.style.display = 'none';
-      chatInput.placeholder = 'Tapez votre message...';
-    }
-    window.cancelReply = cancelReply;
-    
-    // Cancel edit
-    function cancelEdit() {
-      editingMessageId = null;
-      chatInput.placeholder = replyingTo ? 'Répondre à ' + replyingTo.user_name + '...' : 'Tapez votre message...';
-      chatSendBtn.textContent = 'Envoyer';
-    }
-    
-    // Edit message
-    window.editMessage = function(messageId, currentContent) {
-      editingMessageId = messageId;
-      chatInput.value = currentContent;
-      chatInput.placeholder = 'Modifier le message...';
-      chatSendBtn.textContent = 'Modifier';
-      cancelReply();
-      chatInput.focus();
-    };
-    
-    // Delete message
-    window.deleteMessage = function(messageId) {
-      if (!confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) return;
+      };
       
-      fetch(`/chat/${messageId}/delete`, {
-        method: 'POST'
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          lastMessagesHash = '';
-          loadMessages();
-        } else {
-          alert('Erreur: ' + (data.error || 'Impossible de supprimer le message'));
-        }
-      })
-      .catch(error => {
-        console.error('Erreur:', error);
-        alert('Erreur lors de la suppression du message');
-      });
-    };
-    
-    // Send message form
-    if (chatForm) {
+      window.cancelReply = cancelReply;
+      
+      // Send message
       chatForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const content = chatInput.value.trim();
-        if (!content) return;
-        
-        chatSendBtn.disabled = true;
-        
-        if (editingMessageId) {
-          // Edit existing message
-          fetch(`/chat/${editingMessageId}/edit`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ content: content })
+      e.preventDefault();
+      const content = chatInput.value.trim();
+      if (!content) return;
+      
+      chatSendBtn.disabled = true;
+      
+      if (editingMessageId) {
+        fetch(`/chat/${editingMessageId}/edit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content: content })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            cancelEdit();
+            loadMessages();
+          } else {
+            alert(chatTranslations['Erreur'] + ': ' + (data.error || chatTranslations['Impossible de modifier le message']));
+          }
+        })
+        .catch(error => {
+          console.error('Error editing message:', error);
+          alert('Erreur lors de la modification du message');
+        })
+        .finally(() => {
+          chatSendBtn.disabled = false;
+        });
+      } else {
+        fetch('/chat/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            content: content,
+            reply_to_id: replyingTo ? replyingTo.id : null
           })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              chatInput.value = '';
-              cancelEdit();
-              lastMessagesHash = '';
-              loadMessages();
-            } else {
-              alert('Erreur: ' + (data.error || 'Impossible de modifier le message'));
-            }
-          })
-          .catch(error => {
-            console.error('Error editing message:', error);
-            alert('Erreur lors de la modification du message');
-          })
-          .finally(() => {
-            chatSendBtn.disabled = false;
-          });
-        } else {
-          // Send new message
-          fetch('/chat/send', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              content: content,
-              reply_to_id: replyingTo ? replyingTo.id : null
-            })
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              chatInput.value = '';
-              cancelReply();
-              lastMessagesHash = '';
-              loadMessages();
-            } else {
-              alert('Erreur: ' + (data.error || 'Impossible d\'envoyer le message'));
-            }
-          })
-          .catch(error => {
-            console.error('Error sending message:', error);
-            alert('Erreur lors de l\'envoi du message');
-          })
-          .finally(() => {
-            chatSendBtn.disabled = false;
-          });
-        }
-      });
-    }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            chatInput.value = '';
+            cancelReply();
+            lastMessagesHash = '';
+            loadMessages();
+          } else {
+            alert(chatTranslations['Erreur'] + ': ' + (data.error || chatTranslations['Impossible d\'envoyer le message']));
+          }
+        })
+        .catch(error => {
+          console.error('Error sending message:', error);
+          alert('Erreur lors de l\'envoi du message');
+        })
+        .finally(() => {
+          chatSendBtn.disabled = false;
+        });
+      }
+    });
     
-    // Start refresh interval
-    function startRefresh() {
-      if (refreshInterval) return;
-      refreshInterval = setInterval(function() {
+      // Start refresh interval
+      function startRefresh() {
+        if (refreshInterval) return;
+        refreshInterval = setInterval(function() {
+          if (!document.hidden) {
+            loadMessages();
+          }
+        }, 10000);
+      }
+      
+      // Initial load - attendre que le DOM soit complètement rendu
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          loadMessages();
+          startRefresh();
+        });
+      });
+      
+      // Handle visibility change
+      document.addEventListener('visibilitychange', function() {
         if (!document.hidden) {
           loadMessages();
         }
-      }, 10000);
+      });
     }
-    
-    // Stop refresh interval
-    function stopRefresh() {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-        refreshInterval = null;
-      }
-    }
-    
-    // Initial load
-    loadMessages();
-    startRefresh();
-    
-    // Handle visibility change
-    document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) {
-        loadMessages();
-      }
-    });
   })();
 </script>
-</body>
-</html>
-
+{% endblock %}

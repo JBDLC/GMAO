@@ -15,8 +15,17 @@
         box-sizing: border-box;
         font-family: 'Montserrat', sans-serif !important;
       }
-      body {
+      html, body {
+        margin: 0;
+        padding: 0;
+        border: none !important;
+        outline: none !important;
         background-color: white;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
         display: flex;
         font-family: 'Montserrat', sans-serif;
         justify-content: center;
@@ -24,6 +33,8 @@
         height: 100vh;
         overflow: hidden;
         animation: fadeOut 0.5s ease-out 3.5s forwards;
+        border: none !important;
+        outline: none !important;
       }
       @keyframes fadeOut {
         from {
@@ -39,6 +50,8 @@
         align-items: center;
         width: 100%;
         height: 100%;
+        border: none;
+        outline: none;
       }
       video {
         width: auto;
@@ -50,6 +63,49 @@
         backface-visibility: hidden;
         transform: translateZ(0);
         -webkit-transform: translateZ(0);
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      video::cue {
+        display: none !important;
+      }
+      body *,
+      html * {
+        border: none !important;
+        border-left: none !important;
+        border-right: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      body *::before,
+      body *::after,
+      html *::before,
+      html *::after {
+        display: none !important;
+        content: none !important;
+        border: none !important;
+      }
+      hr {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      video::-webkit-media-text-track-display {
+        display: none !important;
+      }
+      video::cue {
+        display: none !important;
+      }
+      /* Masquer tout texte visible */
+      body {
+        color: transparent !important;
+        font-size: 0 !important;
+      }
+      video {
+        color: transparent !important;
+        font-size: 0 !important;
       }
       
       /* Responsive pour mobile */
@@ -70,9 +126,8 @@
   </head>
   <body>
     <div class="logo-container">
-      <video id="logoVideo" autoplay muted playsinline preload="auto">
+      <video id="logoVideo" autoplay muted playsinline preload="auto" style="color: transparent; font-size: 0;">
         <source src="{{ url_for('static', filename='logo/logo_small.mp4') }}" type="video/mp4">
-        Votre navigateur ne supporte pas la lecture de vidéos.
       </video>
     </div>
     <script>

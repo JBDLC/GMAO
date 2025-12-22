@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Modifier le relevé compteur{% endblock %}
+{% block title %}{{ t('Modifier le relevé compteur') }}{% endblock %}
 {% block content %}
 <style>
   .page-header {
@@ -129,14 +129,13 @@
 
 <div class="page-header">
   <div class="d-flex justify-content-between align-items-center">
-    <h1 class="page-title">Modifier le relevé compteur</h1>
-    <a href="{{ url_for('machine_detail', machine_id=machine.id) }}" class="btn btn-outline-secondary">Retour</a>
+    <h1 class="page-title">{{ t('Modifier le relevé compteur') }}</h1>
+    <a href="{{ url_for('machine_detail', machine_id=machine.id) }}" class="btn btn-outline-secondary">{{ t('Retour') }}</a>
   </div>
 </div>
 
 <div class="alert alert-warning" role="alert">
-  <strong>⚠️ Attention :</strong> Vous pouvez augmenter ou diminuer les valeurs des compteurs. 
-  Si vous diminuez un compteur, les valeurs "avant maintenance" de tous les plans de maintenance préventive associés seront automatiquement mises à jour.
+  <strong><img src="{{ url_for('static', filename='icons/alert-triangle.svg') }}" alt="{{ t('Attention :') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; filter: brightness(0) saturate(100%) invert(67%) sepia(100%) saturate(2000%) hue-rotate(0deg) brightness(1) contrast(1);"> {{ t('Attention :') }}</strong> {{ t('Vous pouvez augmenter ou diminuer les valeurs des compteurs. Si vous diminuez un compteur, les valeurs "avant maintenance" de tous les plans de maintenance préventive associés seront automatiquement mises à jour.') }}
 </div>
 
 <form method="post">
@@ -144,10 +143,10 @@
     <table class="table align-middle">
       <thead>
         <tr>
-          <th>Machine / Compteur</th>
-          <th>Code</th>
-          <th>Valeur actuelle</th>
-          <th>Nouvelle valeur</th>
+          <th>{{ t('Machine / Compteur') }}</th>
+          <th>{{ t('Code') }}</th>
+          <th>{{ t('Valeur actuelle') }}</th>
+          <th>{{ t('Nouvelle valeur') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -161,7 +160,6 @@
             <input
               class="form-control"
               type="number"
-              step="0.1"
               name="machine_{{ m.id }}"
               value="{{ "%.1f"|format(m.hours) }}"
               placeholder="Nouvelle valeur"
@@ -175,7 +173,7 @@
           {% if current_root != root_machine_counter %}
             {% set current_root = root_machine_counter %}
             <tr>
-              <td colspan="4" class="bg-light fw-bold pt-2 pb-1">Compteurs de {{ root_machine_counter.name }} (machine racine)</td>
+              <td colspan="4" class="bg-light fw-bold pt-2 pb-1">{{ t('Compteurs de') }} {{ root_machine_counter.name }} {{ t('(machine racine)') }}</td>
             </tr>
           {% endif %}
           {% set unit = counter.unit or 'h' %}
@@ -187,10 +185,9 @@
               <input
                 class="form-control"
                 type="number"
-                step="0.1"
                 name="counter_{{ counter.id }}"
                 value="{{ "%.1f"|format(counter.value) }}"
-                placeholder="Nouvelle valeur"
+                placeholder="{{ t('Nouvelle valeur') }}"
               />
             </td>
           </tr>

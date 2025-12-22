@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Récapitulatif des droits') }}{% endblock %}
+{% block content %}
+
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .permissions-table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    margin-top: 2rem;
+  }
+  .permissions-table table {
+    margin: 0;
+  }
+  .permissions-table thead th {
+    background: #1a3b50;
+    color: white;
+    font-weight: 600;
+    padding: 1rem;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .permissions-table tbody td {
+    padding: 0.75rem 1rem;
+    text-align: center;
+    vertical-align: middle;
+    border-bottom: 1px solid #e9ecef;
+  }
+  .permissions-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .permissions-table tbody th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #1a3b50;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-right: 2px solid #e9ecef;
+  }
+  .badge-yes {
+    background-color: #28a745;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .badge-no {
+    background-color: #dc3545;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .badge-readonly {
+    background-color: #ffc107;
+    color: #1a3b50;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .section-header {
+    background: #f8f9fa;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    color: #1a3b50;
+    border-bottom: 2px solid #1a3b50;
+  }
+</style>
+
+<div class="page-header">
+  <h1 class="page-title">{{ t('Récapitulatif des droits d\'accès') }}</h1>
+</div>
+
+<div class="permissions-table">
+  <table class="table table-bordered mb-0">
+    <thead>
+      <tr>
+        <th style="width: 25%;">{{ t('Fonctionnalité') }}</th>
+        <th style="width: 18.75%;">Admin</th>
+        <th style="width: 18.75%;">Gestionnaire</th>
+        <th style="width: 18.75%;">Technicien</th>
+        <th style="width: 18.75%;">Spectateur</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Section: Accès général -->
+      <tr>
+        <td colspan="5" class="section-header">{{ t('Accès général') }}</td>
+      </tr>
+      <tr>
+        <th>{{ t('Voir les paramètres') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Accès au chat') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Accès au QR code') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+      </tr>
+      
+      <!-- Section: Machines & Maintenances -->
+      <tr>
+        <td colspan="5" class="section-header">{{ t('Machines & Maintenances') }}</td>
+      </tr>
+      <tr>
+        <th>{{ t('Voir machines & maintenances') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Modifier/Supprimer machines') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Créer check list') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Remplir check list') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Créer modèle maintenance préventive') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Remplir maintenance préventive') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Créer maintenance corrective') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Supprimer éléments') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Ajouter documentation') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Voir documentation') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+      </tr>
+      
+      <!-- Section: Stocks & Produits -->
+      <tr>
+        <td colspan="5" class="section-header">{{ t('Stocks & Produits') }}</td>
+      </tr>
+      <tr>
+        <th>{{ t('Voir stocks & produits') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Modifier stocks & produits') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Supprimer stocks') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+      <tr>
+        <th>{{ t('Supprimer produits') }}</th>
+        <td><span class="badge-yes">{{ t('Oui') }}</span></td>
+        <td><span class="badge-no">{{ t('Non') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+        <td><span class="badge-readonly">{{ t('Lecture seule') }}</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-4">
+  <a href="{{ url_for('users') }}" class="btn btn-secondary">{{ t('Retour aux utilisateurs') }}</a>
+</div>
+
+{% endblock %}
+
+

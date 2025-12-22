@@ -117,7 +117,7 @@
     <h1 class="page-title">Liste des maintenances</h1>
   <div class="btn-group">
     <a href="{{ url_for('maintenances_list') }}" class="btn btn-outline-secondary btn-sm">Réinitialiser les filtres</a>
-    <a href="{{ url_for('export_maintenances', filter_type=filter_type, filter_name=filter_name, filter_date=filter_date, filter_machine=filter_machine, filter_user=filter_user) }}" class="btn btn-success btn-sm" title="Exporter en Excel">📊 Export Excel</a>
+    <a href="{{ url_for('export_maintenances', filter_type=filter_type, filter_name=filter_name, filter_date=filter_date, filter_machine=filter_machine, filter_user=filter_user) }}" class="btn btn-success btn-sm" title="Exporter en Excel"><img src="{{ url_for('static', filename='icons/export.svg') }}" alt="Export" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"> Export Excel</a>
   </div>
 </div>
 

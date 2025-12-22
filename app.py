@@ -991,6 +991,47 @@ with app.app_context():
             db.create_all()
     except Exception:
         pass
+    
+    # Migration pour ajouter photo_data et content_type à report_photo
+    try:
+        inspector = inspect(db.engine)
+        if "report_photo" in inspector.get_table_names():
+            report_photo_columns = {col["name"] for col in inspector.get_columns("report_photo")}
+            
+            # Ajouter photo_data si elle n'existe pas
+            if "photo_data" not in report_photo_columns:
+                with db.engine.connect() as conn:
+                    # Pour PostgreSQL, utiliser BYTEA pour les BLOB
+                    # Pour SQLite, utiliser BLOB
+                    if db.engine.dialect.name == 'postgresql':
+                        conn.execute(text("ALTER TABLE report_photo ADD COLUMN photo_data BYTEA"))
+                    else:
+                        conn.execute(text("ALTER TABLE report_photo ADD COLUMN photo_data BLOB"))
+                    conn.commit()
+                    print("Colonne photo_data ajoutée à report_photo")
+            
+            # Ajouter content_type si elle n'existe pas
+            if "content_type" not in report_photo_columns:
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE report_photo ADD COLUMN content_type VARCHAR(50)"))
+                    conn.commit()
+                    print("Colonne content_type ajoutée à report_photo")
+            
+            # Rendre file_path nullable si ce n'est pas déjà le cas
+            # (Cette partie peut échouer si la colonne est déjà nullable, c'est normal)
+            try:
+                with db.engine.connect() as conn:
+                    if db.engine.dialect.name == 'postgresql':
+                        conn.execute(text("ALTER TABLE report_photo ALTER COLUMN file_path DROP NOT NULL"))
+                    else:
+                        # SQLite ne supporte pas ALTER COLUMN, on ignore
+                        pass
+                    conn.commit()
+            except Exception:
+                pass
+    except Exception as exc:
+        print(f"Erreur lors de la migration report_photo: {exc}")
+        pass
     updated = PreventiveComponent.query.filter_by(field_type="increment").update({"field_type": "number"})
     if updated:
         db.session.commit()

@@ -712,22 +712,24 @@
       .chat-close {
         background: transparent;
         border: none;
-        color: #1a3b50;
-        font-size: 20px;
+        color: #dc3545;
+        font-size: 40px;
         cursor: pointer;
         padding: 0;
-        width: 28px;
-        height: 28px;
+        width: 56px;
+        height: 56px;
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 4px;
         transition: background-color 0.2s;
         flex-shrink: 0;
+        font-weight: bold;
       }
       
       .chat-close:hover {
-        background-color: rgba(26, 59, 80, 0.1);
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #c82333;
       }
       
       .chat-messages {
@@ -1848,6 +1850,11 @@
             renderAllItems(filteredItems);
           }
           currentRenderedFilter = currentFilter;
+          
+          // Forcer le scroll vers le dernier message après changement d'onglet
+          requestAnimationFrame(() => {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+          });
         }
         
         chatButton.addEventListener('click', toggleChat);

@@ -2,6 +2,8 @@ import datetime as dt
 import os
 import csv
 import json
+import threading
+import time
 from pathlib import Path
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -679,8 +681,10 @@ class ReportPhoto(db.Model):
     """Photos associées aux rapports"""
     id = db.Column(db.Integer, primary_key=True)
     report_id = db.Column(db.Integer, db.ForeignKey("report.id"), nullable=False)
-    file_path = db.Column(db.String(500), nullable=False)
+    file_path = db.Column(db.String(500), nullable=True)  # Gardé pour compatibilité, mais optionnel maintenant
     original_filename = db.Column(db.String(255), nullable=False)
+    photo_data = db.Column(db.LargeBinary, nullable=True)  # Stockage BLOB des données de l'image
+    content_type = db.Column(db.String(50), nullable=True)  # Type MIME (image/jpeg, image/png, etc.)
 
     report = db.relationship("Report", back_populates="photos")
 
@@ -7354,21 +7358,20 @@ def create_report():
     db.session.add(report)
     db.session.flush()  # Pour obtenir l'ID du rapport
     
-    # Traiter les photos
+    # Traiter les photos - stocker en base de données (BLOB)
     for photo in photos:
         if photo and photo.filename and allowed_image_file(photo.filename):
             original_filename = photo.filename
-            filename = secure_filename(original_filename)
-            timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_")
-            safe_filename = f"{timestamp}{report.id}_{filename}"
-            file_path = REPORT_PHOTOS_FOLDER / safe_filename
-            
-            photo.save(str(file_path))
+            # Lire les données binaires de l'image
+            photo_data = photo.read()
+            # Déterminer le type MIME
+            content_type = photo.content_type or 'image/jpeg'
             
             report_photo = ReportPhoto(
                 report_id=report.id,
-                file_path=str(file_path),
-                original_filename=original_filename
+                original_filename=original_filename,
+                photo_data=photo_data,
+                content_type=content_type
             )
             db.session.add(report_photo)
     
@@ -7401,29 +7404,31 @@ def update_report(report_id):
             photo_id_int = int(photo_id)
             photo = ReportPhoto.query.filter_by(id=photo_id_int, report_id=report.id).first()
             if photo:
-                # Supprimer le fichier
-                if os.path.exists(photo.file_path):
-                    os.remove(photo.file_path)
+                # Supprimer le fichier si il existe (migration)
+                if photo.file_path and os.path.exists(photo.file_path):
+                    try:
+                        os.remove(photo.file_path)
+                    except Exception:
+                        pass
                 db.session.delete(photo)
         except (ValueError, TypeError):
             pass
     
-    # Ajouter de nouvelles photos
+    # Ajouter de nouvelles photos - stocker en base de données (BLOB)
     new_photos = request.files.getlist("photos")
     for photo in new_photos:
         if photo and photo.filename and allowed_image_file(photo.filename):
             original_filename = photo.filename
-            filename = secure_filename(original_filename)
-            timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_")
-            safe_filename = f"{timestamp}{report.id}_{filename}"
-            file_path = REPORT_PHOTOS_FOLDER / safe_filename
-            
-            photo.save(str(file_path))
+            # Lire les données binaires de l'image
+            photo_data = photo.read()
+            # Déterminer le type MIME
+            content_type = photo.content_type or 'image/jpeg'
             
             report_photo = ReportPhoto(
                 report_id=report.id,
-                file_path=str(file_path),
-                original_filename=original_filename
+                original_filename=original_filename,
+                photo_data=photo_data,
+                content_type=content_type
             )
             db.session.add(report_photo)
     
@@ -7462,7 +7467,7 @@ def delete_report(report_id):
 @app.route("/reports/photos/<int:photo_id>")
 @login_required
 def report_photo(photo_id):
-    """Servir une photo de rapport"""
+    """Servir une photo de rapport depuis la base de données"""
     photo = ReportPhoto.query.get_or_404(photo_id)
     report = photo.report
     
@@ -7470,11 +7475,118 @@ def report_photo(photo_id):
     if report.deleted_at:
         abort(404)
     
-    return send_from_directory(
-        str(REPORT_PHOTOS_FOLDER),
-        os.path.basename(photo.file_path),
-        as_attachment=False
-    )
+    # Si la photo est stockée en BLOB dans la base de données
+    if photo.photo_data:
+        response = make_response(photo.photo_data)
+        response.headers['Content-Type'] = photo.content_type or 'image/jpeg'
+        return response
+    # Fallback : si la photo est encore sur le système de fichiers (migration)
+    elif photo.file_path and os.path.exists(photo.file_path):
+        return send_from_directory(
+            str(REPORT_PHOTOS_FOLDER),
+            os.path.basename(photo.file_path),
+            as_attachment=False
+        )
+    else:
+        abort(404)
+
+
+def cleanup_old_reports():
+    """Supprime automatiquement les rapports et leurs photos de plus de 7 jours"""
+    try:
+        week_ago = dt.datetime.utcnow() - dt.timedelta(days=7)
+        
+        # Trouver tous les rapports de plus de 7 jours (y compris ceux soft-deleted)
+        old_reports = Report.query.filter(Report.created_at < week_ago).all()
+        
+        deleted_count = 0
+        for report in old_reports:
+            # Supprimer les fichiers photos si ils existent encore (migration)
+            for photo in report.photos:
+                if photo.file_path and os.path.exists(photo.file_path):
+                    try:
+                        os.remove(photo.file_path)
+                    except Exception:
+                        pass
+            
+            # Supprimer le rapport (cascade supprimera automatiquement les photos)
+            db.session.delete(report)
+            deleted_count += 1
+        
+        if deleted_count > 0:
+            db.session.commit()
+            print(f"Cleanup: {deleted_count} rapports et leurs photos supprimés (plus de 7 jours)")
+        
+        return deleted_count
+    except Exception as exc:
+        db.session.rollback()
+        print(f"Erreur lors du nettoyage des rapports: {exc}")
+        return 0
+
+
+def cleanup_old_chat_messages():
+    """Supprime automatiquement les messages de chat de plus de 7 jours"""
+    try:
+        week_ago = dt.datetime.utcnow() - dt.timedelta(days=7)
+        deleted_count = ChatMessage.query.filter(ChatMessage.created_at < week_ago).count()
+        ChatMessage.query.filter(ChatMessage.created_at < week_ago).delete()
+        db.session.commit()
+        if deleted_count > 0:
+            print(f"Cleanup: {deleted_count} messages de chat supprimés (plus de 7 jours)")
+        return deleted_count
+    except Exception as exc:
+        db.session.rollback()
+        print(f"Erreur lors du nettoyage des messages: {exc}")
+        return 0
+
+
+def cleanup_old_reports():
+    """Supprime automatiquement les rapports et leurs photos de plus de 7 jours"""
+    try:
+        week_ago = dt.datetime.utcnow() - dt.timedelta(days=7)
+        
+        # Trouver tous les rapports de plus de 7 jours (y compris ceux soft-deleted)
+        old_reports = Report.query.filter(Report.created_at < week_ago).all()
+        
+        deleted_count = 0
+        for report in old_reports:
+            # Supprimer les fichiers photos si ils existent encore (migration)
+            for photo in report.photos:
+                if photo.file_path and os.path.exists(photo.file_path):
+                    try:
+                        os.remove(photo.file_path)
+                    except Exception:
+                        pass
+            
+            # Supprimer le rapport (cascade supprimera automatiquement les photos)
+            db.session.delete(report)
+            deleted_count += 1
+        
+        if deleted_count > 0:
+            db.session.commit()
+            print(f"Cleanup: {deleted_count} rapports et leurs photos supprimés (plus de 7 jours)")
+        
+        return deleted_count
+    except Exception as exc:
+        db.session.rollback()
+        print(f"Erreur lors du nettoyage des rapports: {exc}")
+        return 0
+
+
+def cleanup_old_chat_messages():
+    """Supprime automatiquement les messages de chat de plus de 7 jours"""
+    try:
+        week_ago = dt.datetime.utcnow() - dt.timedelta(days=7)
+        deleted_count = ChatMessage.query.filter(ChatMessage.created_at < week_ago).count()
+        ChatMessage.query.filter(ChatMessage.created_at < week_ago).delete()
+        db.session.commit()
+        if deleted_count > 0:
+            print(f"Cleanup: {deleted_count} messages de chat supprimés (plus de 7 jours)")
+        return deleted_count
+    except Exception as exc:
+        db.session.rollback()
+        print(f"Erreur lors du nettoyage des messages: {exc}")
+        return 0
 
 
 @app.context_processor
@@ -8316,6 +8428,30 @@ def delete_excel_file(file_id):
     return redirect(url_for("database_export"))
 
 
+def run_cleanup_scheduler():
+    """Lance le scheduler de nettoyage automatique en arrière-plan"""
+    def cleanup_loop():
+        while True:
+            try:
+                # Exécuter le nettoyage toutes les heures
+                cleanup_old_reports()
+                cleanup_old_chat_messages()
+            except Exception as exc:
+                print(f"Erreur dans le scheduler de nettoyage: {exc}")
+            # Attendre 1 heure avant le prochain nettoyage
+            time.sleep(3600)
+    
+    # Démarrer le thread de nettoyage
+    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+    cleanup_thread.start()
+    print("Scheduler de nettoyage automatique démarré (nettoyage toutes les heures)")
+
+
 if __name__ == "__main__":
+    # Démarrer le scheduler de nettoyage
+    run_cleanup_scheduler()
     app.run(debug=True)
+else:
+    # Pour Gunicorn et autres serveurs WSGI
+    run_cleanup_scheduler()
 

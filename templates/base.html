@@ -1423,6 +1423,10 @@
         let replyingTo = null; // Message auquel on répond
         let editingMessageId = null; // Message en cours d'édition
         let editingReportId = null; // Rapport en cours d'édition
+        let cachedMessages = null; // Cache des messages chargés (tous les messages + rapports)
+        let messagesLoaded = false; // Flag pour savoir si les messages ont été chargés une fois
+        let renderedElementsCache = new Map(); // Cache des éléments DOM déjà rendus (id -> element)
+        let currentRenderedFilter = null; // Filtre actuellement affiché
         const chatReplyPreview = document.getElementById('chat-reply-preview');
         const chatInputArea = document.getElementById('chat-input-area');
         const chatAddReportBtn = document.getElementById('chat-add-report-btn');
@@ -1813,14 +1817,19 @@
         
         // Appliquer le filtre sur les messages en cache (version optimisée)
         function applyFilter() {
-          if (!cachedMessages) return;
+          if (!cachedMessages) {
+            // Si pas de cache, charger les messages
+            loadMessages();
+            return;
+          }
           
           // Si le filtre n'a pas changé, ne rien faire
           if (currentFilter === currentRenderedFilter && renderedElementsCache.size > 0) {
             return;
           }
           
-          // Filtrer les items
+          // Filtrer les items selon le filtre actif
+          // 'all' = tout afficher, sinon filtrer par type
           let filteredItems = cachedMessages;
           if (currentFilter === 'manual') {
             filteredItems = cachedMessages.filter(item => item.type === 'manual');
@@ -1829,9 +1838,15 @@
           } else if (currentFilter === 'report') {
             filteredItems = cachedMessages.filter(item => item.type === 'report');
           }
+          // Si currentFilter === 'all', on garde tous les items
           
           // Utiliser le rendu optimisé qui cache/affiche au lieu de recréer
-          renderAllItemsOptimized(filteredItems);
+          // Mais seulement si on a déjà des éléments rendus, sinon utiliser renderAllItems
+          if (renderedElementsCache.size > 0) {
+            renderAllItemsOptimized(filteredItems);
+          } else {
+            renderAllItems(filteredItems);
+          }
           currentRenderedFilter = currentFilter;
         }
         
@@ -1879,395 +1894,368 @@
                       return dateA - dateB; // Plus ancien en premier
                     });
                     
-                    // Mettre en cache les messages seulement si ce n'est pas un refresh ou si le cache est vide
-                    if (!isRefresh || !cachedMessages) {
-                      cachedMessages = allItems;
-                    } else {
-                      // En cas de refresh, fusionner avec le cache existant pour éviter de perdre les messages
-                      const existingIds = new Set(cachedMessages.map(item => item.id || item.report_id));
-                      const newItems = allItems.filter(item => !existingIds.has(item.id || item.report_id));
-                      if (newItems.length > 0) {
-                        cachedMessages = [...cachedMessages, ...newItems].sort((a, b) => {
-                          const dateA = a.created_at ? new Date(a.created_at) : new Date(a.date + ' ' + a.time);
-                          const dateB = b.created_at ? new Date(b.created_at) : new Date(b.date + ' ' + b.time);
-                          return dateA - dateB;
-                        });
-                      }
-                      allItems = cachedMessages;
-                    }
+                    // Mettre en cache TOUS les messages (pas de filtre à ce stade)
+                    // Le cache contient TOUT : messages + rapports
+                    cachedMessages = allItems;
+                    messagesLoaded = true;
                     
-                    // Filter items based on current filter
-                    let filteredItems = allItems;
-                    if (currentFilter === 'manual') {
-                      filteredItems = allItems.filter(item => item.type === 'manual');
-                    } else if (currentFilter === 'auto') {
-                      filteredItems = allItems.filter(item => item.type === 'auto');
-                    } else if (currentFilter === 'report') {
-                      filteredItems = allItems.filter(item => item.type === 'report');
-                    }
-                    
-                    renderAllItems(filteredItems);
+                    // Appliquer le filtre actuel pour l'affichage
+                    applyFilter();
                   })
                   .catch(error => {
                     console.error('Error loading reports:', error);
-                    // En cas d'erreur, afficher seulement les messages
-                    let filteredMessages = data.messages;
-                    if (currentFilter === 'manual') {
-                      filteredMessages = data.messages.filter(msg => msg.type === 'manual');
-                    } else if (currentFilter === 'auto') {
-                      filteredMessages = data.messages.filter(msg => msg.type === 'auto');
-                    } else if (currentFilter === 'report') {
-                      filteredMessages = [];
-                    }
-                    renderAllItems(filteredMessages);
+                    // En cas d'erreur, mettre en cache seulement les messages (sans rapports)
+                    cachedMessages = data.messages;
+                    messagesLoaded = true;
+                    // Appliquer le filtre
+                    applyFilter();
                   });
-                
-                // Version optimisée : cache les éléments DOM et cache/affiche selon le filtre
-                function renderAllItemsOptimized(items) {
-                  const wasAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop < 150;
-                  const scrollPosition = chatMessages.scrollTop;
-                  
-                  // Créer un Set des IDs des items à afficher pour un accès rapide
-                  const itemsToShow = new Set(items.map(item => item.id || item.report_id));
-                  
-                  // Si aucun élément n'est à afficher, créer un message vide
-                  if (items.length === 0) {
-                    const emptyId = 'empty-message';
-                    if (!renderedElementsCache.has(emptyId)) {
-                      const emptyDiv = document.createElement('div');
-                      emptyDiv.className = 'chat-message';
-                      emptyDiv.style.textAlign = 'center';
-                      emptyDiv.style.color = '#6c757d';
-                      emptyDiv.setAttribute('data-item-id', emptyId);
-                      emptyDiv.textContent = currentFilter === 'all' 
-                        ? chatTranslations['Aucun message'] 
-                        : currentFilter === 'manual' 
-                          ? chatTranslations['Aucun message écrit'] 
-                          : currentFilter === 'auto'
-                            ? chatTranslations['Aucun message système']
-                            : chatTranslations['Aucun rapport'];
-                      chatMessages.appendChild(emptyDiv);
-                      renderedElementsCache.set(emptyId, emptyDiv);
-                    } else {
-                      renderedElementsCache.get(emptyId).style.display = '';
-                    }
-                    // Cacher tous les autres éléments
-                    renderedElementsCache.forEach((element, itemId) => {
-                      if (itemId !== emptyId) {
-                        element.style.display = 'none';
-                      }
-                    });
-                    return;
-                  }
-                  
-                  // Cacher le message vide s'il existe
-                  if (renderedElementsCache.has('empty-message')) {
-                    renderedElementsCache.get('empty-message').style.display = 'none';
-                  }
-                  
-                  // Parcourir tous les éléments rendus et les cacher/afficher
-                  let hasChanges = false;
-                  
-                  // D'abord, créer les éléments manquants pour les items à afficher
-                  items.forEach(item => {
-                    const itemId = item.id || item.report_id;
-                    if (!renderedElementsCache.has(itemId)) {
-                      // Créer l'élément manquant
-                      let element;
-                      if (item.type === 'report') {
-                        element = renderReportMessage(item);
-                      } else {
-                        element = renderChatMessage(item);
-                      }
-                      if (element) {
-                        renderedElementsCache.set(itemId, element);
-                        hasChanges = true;
-                      }
-                    }
-                  });
-                  
-                  // Ensuite, cacher/afficher selon le filtre
-                  renderedElementsCache.forEach((element, itemId) => {
-                    if (itemId === 'empty-message') return; // Ignorer le message vide
-                    
-                    if (itemsToShow.has(itemId)) {
-                      if (element.style.display === 'none') {
-                        element.style.display = '';
-                        hasChanges = true;
-                      }
-                    } else {
-                      if (element.style.display !== 'none') {
-                        element.style.display = 'none';
-                        hasChanges = true;
-                      }
-                    }
-                  });
-                  
-                  // Restaurer la position de scroll seulement si nécessaire
-                  if (hasChanges) {
-                    requestAnimationFrame(() => {
-                      if (wasAtBottom) {
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
-                      } else {
-                        chatMessages.scrollTop = scrollPosition;
-                      }
-                    });
-                  }
-                }
-                
-                // Version originale pour le premier rendu ou quand les messages changent
-                function renderAllItems(items) {
-                  // Créer un hash plus précis des messages pour éviter le re-rendu inutile
-                  const itemsHash = JSON.stringify(items.map(item => ({
-                    id: item.id || item.report_id,
-                    type: item.type,
-                    content: item.content ? item.content.substring(0, 100) : '',
-                    date: item.date,
-                    time: item.time,
-                    edited: item.edited || false,
-                    photos_count: item.photos ? item.photos.length : 0
-                  })));
-                  
-                  // Ne re-rendre que si les messages ont vraiment changé
-                  if (itemsHash === lastMessagesHash && chatMessages.children.length === items.length && currentRenderedFilter === currentFilter) {
-                    // Messages identiques, pas besoin de re-rendre
-                    return;
-                  }
-                  
-                  lastMessagesHash = itemsHash;
-                  currentRenderedFilter = currentFilter;
-                  
-                  // Sauvegarder la position de scroll avant le re-rendu
-                  const wasAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop < 150;
-                  const scrollPosition = chatMessages.scrollTop;
-                  const scrollHeight = chatMessages.scrollHeight;
-                  
-                  // Vider le cache DOM et recréer tous les éléments
-                  renderedElementsCache.clear();
-                  
-                  // Utiliser requestAnimationFrame pour un rendu plus fluide
-                  requestAnimationFrame(() => {
-                    chatMessages.innerHTML = '';
-                    
-                    if (items.length === 0) {
-                      const emptyDiv = document.createElement('div');
-                      emptyDiv.className = 'chat-message';
-                      emptyDiv.style.textAlign = 'center';
-                      emptyDiv.style.color = '#6c757d';
-                      emptyDiv.setAttribute('data-item-id', 'empty-message');
-                      emptyDiv.textContent = currentFilter === 'all' 
-                        ? chatTranslations['Aucun message'] 
-                        : currentFilter === 'manual' 
-                          ? chatTranslations['Aucun message écrit'] 
-                          : currentFilter === 'auto'
-                            ? chatTranslations['Aucun message système']
-                            : chatTranslations['Aucun rapport'];
-                      chatMessages.appendChild(emptyDiv);
-                      renderedElementsCache.set('empty-message', emptyDiv);
-                    } else {
-                      items.forEach(item => {
-                        const itemId = item.id || item.report_id;
-                        if (item.type === 'report') {
-                          const element = renderReportMessage(item);
-                          if (element) {
-                            renderedElementsCache.set(itemId, element);
-                          }
-                        } else {
-                          const element = renderChatMessage(item);
-                          if (element) {
-                            renderedElementsCache.set(itemId, element);
-                          }
-                        }
-                      });
-                    }
-                    
-                    // Restaurer la position de scroll ou aller en bas
-                    requestAnimationFrame(() => {
-                      if (wasAtBottom || chatMessages.scrollTop === 0) {
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
-                      } else {
-                        // Maintenir la position relative si on n'était pas en bas
-                        const newScrollHeight = chatMessages.scrollHeight;
-                        const heightDiff = newScrollHeight - scrollHeight;
-                        chatMessages.scrollTop = scrollPosition + heightDiff;
-                      }
-                    });
-                  });
-                }
-                
-                function renderChatMessage(msg) {
-                  const messageDiv = document.createElement('div');
-                  messageDiv.className = `chat-message ${msg.type} ${msg.is_own ? 'own' : ''}`;
-                  messageDiv.setAttribute('data-message-id', msg.id);
-                  messageDiv.setAttribute('data-item-id', msg.id);
-                  
-                  // Reply preview if exists
-                  if (msg.reply_to) {
-                    const replyDiv = document.createElement('div');
-                    replyDiv.className = 'chat-message-reply';
-                    replyDiv.innerHTML = `
-                      <div class="chat-message-reply-user">${msg.reply_to.user_name}</div>
-                      <div class="chat-message-reply-content">${msg.reply_to.content}</div>
-                    `;
-                    replyDiv.addEventListener('click', function() {
-                      const originalMsg = chatMessages.querySelector(`[data-message-id="${msg.reply_to.id}"]`);
-                      if (originalMsg) {
-                        originalMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        originalMsg.style.backgroundColor = '#fff3cd';
-                        setTimeout(() => {
-                          originalMsg.style.backgroundColor = '';
-                        }, 2000);
-                      }
-                    });
-                    messageDiv.appendChild(replyDiv);
-                  }
-                  
-                  const header = document.createElement('div');
-                  header.className = 'chat-message-header';
-                  
-                  const userSpan = document.createElement('span');
-                  userSpan.className = 'chat-message-user';
-                  userSpan.textContent = msg.user_name || 'Système';
-                  
-                  const headerRight = document.createElement('div');
-                  headerRight.className = 'chat-message-header-right';
-                  
-                  // Actions for manual messages
-                  if (msg.type === 'manual') {
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'chat-message-actions';
-                    
-                    if (msg.is_own) {
-                      actionsDiv.innerHTML = `
-                        <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
-                        <button class="chat-message-action-btn" onclick="editMessage(${msg.id}, '${msg.content.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
-                        <button class="chat-message-action-btn" onclick="deleteMessage(${msg.id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
-                      `;
-                    } else {
-                      actionsDiv.innerHTML = `
-                        <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
-                      `;
-                    }
-                    headerRight.appendChild(actionsDiv);
-                  }
-                  
-                  const dateSpan = document.createElement('span');
-                  dateSpan.className = 'chat-message-date';
-                  dateSpan.innerHTML = `${msg.date} ${msg.time}${msg.edited ? ' <span class="chat-message-edited">(modifié)</span>' : ''}`;
-                  headerRight.appendChild(dateSpan);
-                  
-                  header.appendChild(userSpan);
-                  header.appendChild(headerRight);
-                  
-                  const content = document.createElement('div');
-                  content.className = 'chat-message-content';
-                  content.textContent = msg.content;
-                  
-                  messageDiv.appendChild(header);
-                  messageDiv.appendChild(content);
-                  
-                  if (msg.link_url) {
-                    const link = document.createElement('a');
-                    link.href = msg.link_url;
-                    link.className = 'chat-message-link';
-                    link.textContent = 'Voir la tâche →';
-                    link.target = '_blank';
-                    messageDiv.appendChild(link);
-                  }
-                  
-                  chatMessages.appendChild(messageDiv);
-                  
-                  if (msg.id > lastMessageId && typeof msg.id === 'number') {
-                    lastMessageId = msg.id;
-                  }
-                  
-                  return messageDiv;
-                }
-                
-                function renderReportMessage(report) {
-                  const messageDiv = document.createElement('div');
-                  messageDiv.className = `chat-message report ${report.is_own ? 'own' : ''}`;
-                  messageDiv.setAttribute('data-report-id', report.report_id);
-                  messageDiv.setAttribute('data-item-id', report.report_id);
-                  
-                  const header = document.createElement('div');
-                  header.className = 'chat-message-header';
-                  
-                  const userSpan = document.createElement('span');
-                  userSpan.className = 'chat-message-user';
-                  userSpan.textContent = report.user_name;
-                  
-                  const headerRight = document.createElement('div');
-                  headerRight.className = 'chat-message-header-right';
-                  
-                  // Actions pour les rapports (modifier/supprimer si propriétaire)
-                  if (report.is_own) {
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'chat-message-actions';
-                    actionsDiv.innerHTML = `
-                      <button class="chat-message-action-btn" onclick="editReport(${report.report_id})" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
-                      <button class="chat-message-action-btn" onclick="deleteReport(${report.report_id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
-                    `;
-                    headerRight.appendChild(actionsDiv);
-                  }
-                  
-                  const dateSpan = document.createElement('span');
-                  dateSpan.className = 'chat-message-date';
-                  dateSpan.innerHTML = `${report.date} ${report.time}${report.edited ? ' <span class="chat-message-edited">(modifié)</span>' : ''}`;
-                  headerRight.appendChild(dateSpan);
-                  
-                  header.appendChild(userSpan);
-                  header.appendChild(headerRight);
-                  
-                  const content = document.createElement('div');
-                  content.className = 'chat-message-content';
-                  content.style.whiteSpace = 'pre-wrap';
-                  content.textContent = report.content;
-                  
-                  messageDiv.appendChild(header);
-                  messageDiv.appendChild(content);
-                  
-                  // Photos
-                  if (report.photos && report.photos.length > 0) {
-                    const photosDiv = document.createElement('div');
-                    photosDiv.style.display = 'grid';
-                    photosDiv.style.gridTemplateColumns = 'repeat(auto-fill, minmax(120px, 1fr))';
-                    photosDiv.style.gap = '8px';
-                    photosDiv.style.marginTop = '12px';
-                    
-                    report.photos.forEach(photo => {
-                      const img = document.createElement('img');
-                      img.src = photo.url;
-                      img.style.width = '100%';
-                      img.style.height = '120px';
-                      img.style.objectFit = 'cover';
-                      img.style.borderRadius = '4px';
-                      img.style.cursor = 'pointer';
-                      img.addEventListener('click', function() {
-                        if (photoModalEl) {
-                          const photoModalImg = photoModalEl.querySelector('#photoModalImage');
-                          if (photoModalImg) {
-                            photoModalImg.src = photo.url;
-                            if (photoModal) photoModal.show();
-                          }
-                        }
-                      });
-                      photosDiv.appendChild(img);
-                    });
-                    
-                    messageDiv.appendChild(photosDiv);
-                  }
-                  
-                  chatMessages.appendChild(messageDiv);
-                  
-                  return messageDiv;
-                }
-                
               }
             })
             .catch(error => {
               console.error('Error loading messages:', error);
             });
+        }
+        
+        // Version optimisée : cache les éléments DOM et cache/affiche selon le filtre
+        function renderAllItemsOptimized(items) {
+          const wasAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop < 150;
+          const scrollPosition = chatMessages.scrollTop;
+          
+          // Créer un Set des IDs des items à afficher pour un accès rapide
+          const itemsToShow = new Set(items.map(item => item.id || item.report_id));
+          
+          // Si aucun élément n'est à afficher, créer un message vide
+          if (items.length === 0) {
+            const emptyId = 'empty-message';
+            if (!renderedElementsCache.has(emptyId)) {
+              const emptyDiv = document.createElement('div');
+              emptyDiv.className = 'chat-message';
+              emptyDiv.style.textAlign = 'center';
+              emptyDiv.style.color = '#6c757d';
+              emptyDiv.setAttribute('data-item-id', emptyId);
+              emptyDiv.textContent = currentFilter === 'all' 
+                ? chatTranslations['Aucun message'] 
+                : currentFilter === 'manual' 
+                  ? chatTranslations['Aucun message écrit'] 
+                  : currentFilter === 'auto'
+                    ? chatTranslations['Aucun message système']
+                    : chatTranslations['Aucun rapport'];
+              chatMessages.appendChild(emptyDiv);
+              renderedElementsCache.set(emptyId, emptyDiv);
+            } else {
+              renderedElementsCache.get(emptyId).style.display = '';
+            }
+            // Cacher tous les autres éléments
+            renderedElementsCache.forEach((element, itemId) => {
+              if (itemId !== emptyId) {
+                element.style.display = 'none';
+              }
+            });
+            return;
+          }
+          
+          // Cacher le message vide s'il existe
+          if (renderedElementsCache.has('empty-message')) {
+            renderedElementsCache.get('empty-message').style.display = 'none';
+          }
+          
+          // Parcourir tous les éléments rendus et les cacher/afficher
+          let hasChanges = false;
+          
+          // D'abord, créer les éléments manquants pour les items à afficher
+          items.forEach(item => {
+            const itemId = item.id || item.report_id;
+            if (!renderedElementsCache.has(itemId)) {
+              // Créer l'élément manquant
+              let element;
+              if (item.type === 'report') {
+                element = renderReportMessage(item);
+              } else {
+                element = renderChatMessage(item);
+              }
+              if (element) {
+                renderedElementsCache.set(itemId, element);
+                hasChanges = true;
+              }
+            }
+          });
+          
+          // Ensuite, cacher/afficher selon le filtre
+          renderedElementsCache.forEach((element, itemId) => {
+            if (itemId === 'empty-message') return; // Ignorer le message vide
+            
+            if (itemsToShow.has(itemId)) {
+              if (element.style.display === 'none') {
+                element.style.display = '';
+                hasChanges = true;
+              }
+            } else {
+              if (element.style.display !== 'none') {
+                element.style.display = 'none';
+                hasChanges = true;
+              }
+            }
+          });
+          
+          // Restaurer la position de scroll seulement si nécessaire
+          if (hasChanges) {
+            requestAnimationFrame(() => {
+              if (wasAtBottom) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+              } else {
+                chatMessages.scrollTop = scrollPosition;
+              }
+            });
+          }
+        }
+        
+        // Version originale pour le premier rendu ou quand les messages changent
+        function renderAllItems(items) {
+          // Créer un hash plus précis des messages pour éviter le re-rendu inutile
+          const itemsHash = JSON.stringify(items.map(item => ({
+            id: item.id || item.report_id,
+            type: item.type,
+            content: item.content ? item.content.substring(0, 100) : '',
+            date: item.date,
+            time: item.time,
+            edited: item.edited || false,
+            photos_count: item.photos ? item.photos.length : 0
+          })));
+          
+          // Ne re-rendre que si les messages ont vraiment changé
+          if (itemsHash === lastMessagesHash && chatMessages.children.length === items.length && currentRenderedFilter === currentFilter) {
+            // Messages identiques, pas besoin de re-rendre
+            return;
+          }
+          
+          lastMessagesHash = itemsHash;
+          currentRenderedFilter = currentFilter;
+          
+          // Sauvegarder la position de scroll avant le re-rendu
+          const wasAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop < 150;
+          const scrollPosition = chatMessages.scrollTop;
+          const scrollHeight = chatMessages.scrollHeight;
+          
+          // Vider le cache DOM et recréer tous les éléments
+          renderedElementsCache.clear();
+          
+          // Utiliser requestAnimationFrame pour un rendu plus fluide
+          requestAnimationFrame(() => {
+            chatMessages.innerHTML = '';
+            
+            if (items.length === 0) {
+              const emptyDiv = document.createElement('div');
+              emptyDiv.className = 'chat-message';
+              emptyDiv.style.textAlign = 'center';
+              emptyDiv.style.color = '#6c757d';
+              emptyDiv.setAttribute('data-item-id', 'empty-message');
+              emptyDiv.textContent = currentFilter === 'all' 
+                ? chatTranslations['Aucun message'] 
+                : currentFilter === 'manual' 
+                  ? chatTranslations['Aucun message écrit'] 
+                  : currentFilter === 'auto'
+                    ? chatTranslations['Aucun message système']
+                    : chatTranslations['Aucun rapport'];
+              chatMessages.appendChild(emptyDiv);
+              renderedElementsCache.set('empty-message', emptyDiv);
+            } else {
+              items.forEach(item => {
+                const itemId = item.id || item.report_id;
+                if (item.type === 'report') {
+                  const element = renderReportMessage(item);
+                  if (element) {
+                    renderedElementsCache.set(itemId, element);
+                  }
+                } else {
+                  const element = renderChatMessage(item);
+                  if (element) {
+                    renderedElementsCache.set(itemId, element);
+                  }
+                }
+              });
+            }
+            
+            // Restaurer la position de scroll ou aller en bas
+            requestAnimationFrame(() => {
+              if (wasAtBottom || chatMessages.scrollTop === 0) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+              } else {
+                // Maintenir la position relative si on n'était pas en bas
+                const newScrollHeight = chatMessages.scrollHeight;
+                const heightDiff = newScrollHeight - scrollHeight;
+                chatMessages.scrollTop = scrollPosition + heightDiff;
+              }
+            });
+          });
+        }
+        
+        function renderChatMessage(msg) {
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `chat-message ${msg.type} ${msg.is_own ? 'own' : ''}`;
+          messageDiv.setAttribute('data-message-id', msg.id);
+          messageDiv.setAttribute('data-item-id', msg.id);
+          
+          // Reply preview if exists
+          if (msg.reply_to) {
+            const replyDiv = document.createElement('div');
+            replyDiv.className = 'chat-message-reply';
+            replyDiv.innerHTML = `
+              <div class="chat-message-reply-user">${msg.reply_to.user_name}</div>
+              <div class="chat-message-reply-content">${msg.reply_to.content}</div>
+            `;
+            replyDiv.addEventListener('click', function() {
+              const originalMsg = chatMessages.querySelector(`[data-message-id="${msg.reply_to.id}"]`);
+              if (originalMsg) {
+                originalMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                originalMsg.style.backgroundColor = '#fff3cd';
+                setTimeout(() => {
+                  originalMsg.style.backgroundColor = '';
+                }, 2000);
+              }
+            });
+            messageDiv.appendChild(replyDiv);
+          }
+          
+          const header = document.createElement('div');
+          header.className = 'chat-message-header';
+          
+          const userSpan = document.createElement('span');
+          userSpan.className = 'chat-message-user';
+          userSpan.textContent = msg.user_name || 'Système';
+          
+          const headerRight = document.createElement('div');
+          headerRight.className = 'chat-message-header-right';
+          
+          // Actions for manual messages
+          if (msg.type === 'manual') {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'chat-message-actions';
+            
+            if (msg.is_own) {
+              actionsDiv.innerHTML = `
+                <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
+                <button class="chat-message-action-btn" onclick="editMessage(${msg.id}, '${msg.content.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
+                <button class="chat-message-action-btn" onclick="deleteMessage(${msg.id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
+              `;
+            } else {
+              actionsDiv.innerHTML = `
+                <button class="chat-message-action-btn" onclick="replyToMessage(${msg.id})" title="${chatTranslations['Répondre']}">↩</button>
+              `;
+            }
+            headerRight.appendChild(actionsDiv);
+          }
+          
+          const dateSpan = document.createElement('span');
+          dateSpan.className = 'chat-message-date';
+          dateSpan.innerHTML = `${msg.date} ${msg.time}${msg.edited ? ' <span class="chat-message-edited">(modifié)</span>' : ''}`;
+          headerRight.appendChild(dateSpan);
+          
+          header.appendChild(userSpan);
+          header.appendChild(headerRight);
+          
+          const content = document.createElement('div');
+          content.className = 'chat-message-content';
+          content.textContent = msg.content;
+          
+          messageDiv.appendChild(header);
+          messageDiv.appendChild(content);
+          
+          if (msg.link_url) {
+            const link = document.createElement('a');
+            link.href = msg.link_url;
+            link.className = 'chat-message-link';
+            link.textContent = 'Voir la tâche →';
+            link.target = '_blank';
+            messageDiv.appendChild(link);
+          }
+          
+          chatMessages.appendChild(messageDiv);
+          
+          if (msg.id > lastMessageId && typeof msg.id === 'number') {
+            lastMessageId = msg.id;
+          }
+          
+          return messageDiv;
+        }
+        
+        function renderReportMessage(report) {
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `chat-message report ${report.is_own ? 'own' : ''}`;
+          messageDiv.setAttribute('data-report-id', report.report_id);
+          messageDiv.setAttribute('data-item-id', report.report_id);
+          
+          const header = document.createElement('div');
+          header.className = 'chat-message-header';
+          
+          const userSpan = document.createElement('span');
+          userSpan.className = 'chat-message-user';
+          userSpan.textContent = report.user_name;
+          
+          const headerRight = document.createElement('div');
+          headerRight.className = 'chat-message-header-right';
+          
+          // Actions pour les rapports (modifier/supprimer si propriétaire)
+          if (report.is_own) {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'chat-message-actions';
+            actionsDiv.innerHTML = `
+              <button class="chat-message-action-btn" onclick="editReport(${report.report_id})" title="${chatTranslations['Modifier']}"><img src="/static/icons/edit.svg" alt="${chatTranslations['Modifier']}" style="width: 14px; height: 14px;"></button>
+              <button class="chat-message-action-btn" onclick="deleteReport(${report.report_id})" title="${chatTranslations['Supprimer']}"><img src="/static/icons/delete.svg" alt="${chatTranslations['Supprimer']}" style="width: 14px; height: 14px;"></button>
+            `;
+            headerRight.appendChild(actionsDiv);
+          }
+          
+          const dateSpan = document.createElement('span');
+          dateSpan.className = 'chat-message-date';
+          dateSpan.innerHTML = `${report.date} ${report.time}${report.edited ? ' <span class="chat-message-edited">(modifié)</span>' : ''}`;
+          headerRight.appendChild(dateSpan);
+          
+          header.appendChild(userSpan);
+          header.appendChild(headerRight);
+          
+          const content = document.createElement('div');
+          content.className = 'chat-message-content';
+          content.style.whiteSpace = 'pre-wrap';
+          content.textContent = report.content;
+          
+          messageDiv.appendChild(header);
+          messageDiv.appendChild(content);
+          
+          // Photos
+          if (report.photos && report.photos.length > 0) {
+            const photosDiv = document.createElement('div');
+            photosDiv.style.display = 'grid';
+            photosDiv.style.gridTemplateColumns = 'repeat(auto-fill, minmax(120px, 1fr))';
+            photosDiv.style.gap = '8px';
+            photosDiv.style.marginTop = '12px';
+            
+            report.photos.forEach(photo => {
+              const img = document.createElement('img');
+              img.src = photo.url;
+              img.style.width = '100%';
+              img.style.height = '120px';
+              img.style.objectFit = 'cover';
+              img.style.borderRadius = '4px';
+              img.style.cursor = 'pointer';
+              img.addEventListener('click', function() {
+                if (photoModalEl) {
+                  const photoModalImg = photoModalEl.querySelector('#photoModalImage');
+                  if (photoModalImg) {
+                    photoModalImg.src = photo.url;
+                    if (photoModal) photoModal.show();
+                  }
+                }
+              });
+              photosDiv.appendChild(img);
+            });
+            
+            messageDiv.appendChild(photosDiv);
+          }
+          
+          chatMessages.appendChild(messageDiv);
+          
+          return messageDiv;
         }
         
         // Reply to message

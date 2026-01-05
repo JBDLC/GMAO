@@ -320,7 +320,7 @@ class FollowedMachine(db.Model):
     """Machines suivies par les utilisateurs"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=dt.datetime.utcnow)
 
     user = db.relationship("User", backref="followed_machines")
@@ -2454,6 +2454,9 @@ def delete_machine(machine_id):
     # Supprimer les plans de maintenance associés (cascade)
     PreventiveReport.query.filter_by(machine_id=machine_id).delete()
     MaintenanceProgress.query.filter_by(machine_id=machine_id).delete()
+    
+    # Supprimer les relations de suivi (followed_machine)
+    FollowedMachine.query.filter_by(machine_id=machine_id).delete()
     
     # Supprimer la machine
     db.session.delete(machine)

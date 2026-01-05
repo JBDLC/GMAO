@@ -8507,6 +8507,12 @@ try:
 except ImportError:
     pass  # Si le fichier n'existe pas, continuer sans erreur
 
+# Importer la documentation Swagger
+try:
+    import swagger_docs
+except ImportError:
+    pass  # Si le fichier n'existe pas, continuer sans erreur
+
 if __name__ == "__main__":
     # Démarrer le scheduler de nettoyage
     run_cleanup_scheduler()

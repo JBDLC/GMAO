@@ -1157,6 +1157,8 @@
               <ul class="dropdown-menu" aria-labelledby="navbarDropdownParams">
                 <li><a class="dropdown-item" href="{{ url_for('users') }}">{{ t('Utilisateurs') }}</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('database_export') }}">{{ t('Base de données') }}</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="/api/docs" target="_blank">{{ t('Documentation API') }} <i class="bi bi-box-arrow-up-right" style="font-size: 0.8em; margin-left: 4px;"></i></a></li>
               </ul>
             </li>
             {% endif %}

@@ -70,6 +70,7 @@ TRANSLATIONS = {
         
         # Documentation
         'Documentation': 'Documentation',
+        'Documentation API': 'Documentation API',
         'Ajouter un document': 'Ajouter un document',
         'Aucun document disponible': 'Aucun document disponible',
         
@@ -385,6 +386,7 @@ TRANSLATIONS = {
         
         # Documentation
         'Documentation': 'Documentación',
+        'Documentation API': 'Documentación API',
         'Ajouter un document': 'Añadir un documento',
         'Aucun document disponible': 'No hay documentos disponibles',
         
@@ -757,6 +759,7 @@ TRANSLATIONS = {
         
         # Documentation
         'Documentation': 'Documentation',
+        'Documentation API': 'Documentation API',
         'Ajouter un document': 'Add a Document',
         'Aucun document disponible': 'No document available',
         
@@ -1165,6 +1168,7 @@ TRANSLATIONS = {
         
         # Documentation
         'Documentation': 'Documentazione',
+        'Documentation API': 'Documentazione API',
         'Ajouter un document': 'Aggiungi un Documento',
         'Aucun document disponible': 'Nessun documento disponibile',
         

@@ -24,6 +24,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from flask_sqlalchemy import SQLAlchemy
+from flask_jwt_extended import JWTManager
+from flask_cors import CORS
 from sqlalchemy import CheckConstraint, inspect, text, func
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
@@ -64,7 +66,15 @@ else:
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-in-production")
 
+# Configuration JWT pour l'API mobile
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", app.config["SECRET_KEY"])
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False  # Tokens sans expiration (ou définir une durée)
+
 db = SQLAlchemy(app)
+
+# Initialiser JWT et CORS
+jwt = JWTManager(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})  # Autoriser toutes les origines pour l'API
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -8490,6 +8500,12 @@ def run_cleanup_scheduler():
     cleanup_thread.start()
     print("Scheduler de nettoyage automatique démarré (nettoyage toutes les heures)")
 
+
+# Importer les routes API pour l'application mobile
+try:
+    import api_routes
+except ImportError:
+    pass  # Si le fichier n'existe pas, continuer sans erreur
 
 if __name__ == "__main__":
     # Démarrer le scheduler de nettoyage

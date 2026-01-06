@@ -150,11 +150,11 @@
     </select>
   </div>
   <div class="mb-3 d-none" id="counterSelectContainer">
-    <label class="form-label">Compteur de référence pour la périodicité <span class="text-danger" id="counterRequired">*</span></label>
-    <select class="form-select" name="counter_id" id="counterSelect">
-      <option value="">Sélectionnez un compteur...</option>
-    </select>
-    <small class="form-text text-muted">Choisissez le compteur auquel se réfère la périodicité de ce modèle. Vous pouvez choisir le compteur de la machine/sous-machine ou un compteur de la machine racine.</small>
+    <label class="form-label">Compteur(s) de référence pour la périodicité <span class="text-danger" id="counterRequired">*</span></label>
+    <div id="countersList" style="max-height: 200px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 4px; padding: 0.5rem;">
+      <!-- Les compteurs seront ajoutés ici dynamiquement -->
+    </div>
+    <small class="form-text text-muted">Sélectionnez un ou plusieurs compteurs. La maintenance sera déclenchée lorsque le premier compteur atteint sa périodicité.</small>
   </div>
   <div class="mb-3">
     <label class="form-label">Nom du rapport</label>
@@ -240,11 +240,12 @@
   
   async function updateCounterSelect() {
     const machineId = machineSelect.value;
+    const countersList = document.getElementById("countersList");
     
     if (!machineId) {
       counterSelectContainer.classList.add("d-none");
-      counterSelect.innerHTML = '<option value="">Sélectionnez un compteur...</option>';
-      counterSelect.removeAttribute("required");
+      countersList.innerHTML = "";
+      document.getElementById("counterRequired").style.display = "none";
       return;
     }
     
@@ -255,38 +256,63 @@
       
       if (counters && counters.length > 0) {
         counterSelectContainer.classList.remove("d-none");
-        counterSelect.innerHTML = '<option value="">Sélectionnez un compteur...</option>';
+        countersList.innerHTML = "";
         
         // Vérifier si la machine a son propre compteur
         const hasMachineCounter = counters.some(c => c.type === "machine");
         
         counters.forEach(counter => {
-          const option = document.createElement("option");
-          // Si counter.id est null, on utilise une valeur spéciale pour indiquer le compteur de la machine
-          option.value = counter.id === null ? "machine" : counter.id;
-          option.textContent = counter.name + ` (${counter.value} ${counter.unit})`;
-          counterSelect.appendChild(option);
+          const div = document.createElement("div");
+          div.className = "form-check mb-2";
+          
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.className = "form-check-input counter-checkbox";
+          checkbox.name = "counter_ids[]";
+          checkbox.value = counter.id === null ? "machine" : counter.id;
+          checkbox.id = `counter_${counter.id === null ? "machine" : counter.id}`;
+          
+          const label = document.createElement("label");
+          label.className = "form-check-label";
+          label.htmlFor = checkbox.id;
+          label.textContent = counter.name + ` (${counter.value} ${counter.unit})`;
+          
+          div.appendChild(checkbox);
+          div.appendChild(label);
+          countersList.appendChild(div);
         });
         
-        // Si la machine n'a pas de compteur, le sélecteur de compteur est obligatoire
+        // Si la machine n'a pas de compteur, au moins un compteur est obligatoire
         if (!hasMachineCounter) {
-          counterSelect.setAttribute("required", "required");
           document.getElementById("counterRequired").style.display = "inline";
         } else {
-          counterSelect.removeAttribute("required");
           document.getElementById("counterRequired").style.display = "none";
         }
       } else {
         counterSelectContainer.classList.add("d-none");
-        counterSelect.innerHTML = '<option value="">Aucun compteur disponible</option>';
-        counterSelect.removeAttribute("required");
+        countersList.innerHTML = '<div class="text-muted">Aucun compteur disponible</div>';
+        document.getElementById("counterRequired").style.display = "none";
       }
     } catch (error) {
       console.error("Erreur lors de la récupération des compteurs:", error);
       counterSelectContainer.classList.add("d-none");
-      counterSelect.removeAttribute("required");
+      document.getElementById("counterRequired").style.display = "none";
     }
   }
+  
+  // Validation : au moins un compteur doit être sélectionné si requis
+  document.getElementById("maintenanceForm").addEventListener("submit", function(e) {
+    const counterRequired = document.getElementById("counterRequired").style.display !== "none";
+    if (counterRequired) {
+      const checked = document.querySelectorAll('.counter-checkbox:checked');
+      if (checked.length === 0) {
+        e.preventDefault();
+        alert("Veuillez sélectionner au moins un compteur.");
+        return false;
+      }
+    }
+    return true;
+  });
   
   machineSelect.addEventListener("change", updateCounterSelect);
   

@@ -440,16 +440,36 @@ class PreventiveReport(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
-    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # Pour les machines racines avec plusieurs compteurs
+    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # DEPRECATED: Utiliser report_counters pour plusieurs compteurs
     periodicity = db.Column(db.Integer, nullable=False)
 
     machine = db.relationship("Machine", backref="preventive_reports")
-    counter = db.relationship("Counter", backref="preventive_reports")
+    counter = db.relationship("Counter", backref="preventive_reports")  # DEPRECATED: Utiliser report_counters
     components = db.relationship(
         "PreventiveComponent",
         back_populates="report",
         cascade="all, delete-orphan",
         order_by="PreventiveComponent.id",
+    )
+    # Relation many-to-many avec Counter via PreventiveReportCounter
+    report_counters = db.relationship(
+        "PreventiveReportCounter",
+        back_populates="report",
+        cascade="all, delete-orphan"
+    )
+
+
+class PreventiveReportCounter(db.Model):
+    """Table de liaison pour lier plusieurs compteurs à un plan de maintenance"""
+    id = db.Column(db.Integer, primary_key=True)
+    report_id = db.Column(db.Integer, db.ForeignKey("preventive_report.id"), nullable=False, index=True)
+    counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # None = compteur machine classique
+    
+    report = db.relationship("PreventiveReport", back_populates="report_counters")
+    counter = db.relationship("Counter", backref="report_counters")
+    
+    __table_args__ = (
+        db.UniqueConstraint("report_id", "counter_id", name="uq_report_counter"),
     )
 
 
@@ -823,6 +843,27 @@ with app.app_context():
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_preventive_report_counter_id ON preventive_report(counter_id)"))
                 conn.commit()
             except Exception:
+                pass
+            
+            # Créer la table PreventiveReportCounter si elle n'existe pas
+            try:
+                inspector = inspect(db.engine)
+                if 'preventive_report_counter' not in inspector.get_table_names():
+                    conn.execute(text("""
+                        CREATE TABLE preventive_report_counter (
+                            id INTEGER PRIMARY KEY,
+                            report_id INTEGER NOT NULL,
+                            counter_id INTEGER,
+                            FOREIGN KEY (report_id) REFERENCES preventive_report(id) ON DELETE CASCADE,
+                            FOREIGN KEY (counter_id) REFERENCES counter(id) ON DELETE CASCADE,
+                            UNIQUE (report_id, counter_id)
+                        )
+                    """))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_preventive_report_counter_report_id ON preventive_report_counter(report_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_preventive_report_counter_counter_id ON preventive_report_counter(counter_id)"))
+                    conn.commit()
+            except Exception as e:
+                print(f"Erreur lors de la création de preventive_report_counter: {e}")
                 pass
             
             # Index pour ChatMessage
@@ -1780,14 +1821,8 @@ def machine_detail(machine_id):
         )
         progress_map = {(record.report_id, record.counter_id): record for record in progress_records}
         for report in templates:
-            # Utiliser counter_id comme clé si disponible, sinon None
-            key = (report.id, report.counter_id)
-            progress = progress_map.get(key)
-            if progress:
-                hours_remaining = progress.hours_since
-            else:
-                # Fallback: calculate initial value (ne devrait normalement pas arriver si ensure_all_progress_for_machine fonctionne)
-                hours_remaining = report.periodicity
+            # Utiliser la fonction get_report_min_hours_since pour gérer plusieurs compteurs
+            hours_remaining = get_report_min_hours_since(machine, report)
             template_progress.append({"report": report, "hours_since": hours_remaining})
             
             # Regrouper les entries par report_id
@@ -4428,32 +4463,55 @@ def new_maintenance():
             flash("La machine doit avoir un compteur ou la machine racine doit avoir des compteurs pour créer un modèle de maintenance", "danger")
             return redirect(request.url)
 
-        # Gérer le counter_id sélectionné
-        counter_id = None
-        counter_id_raw = request.form.get("counter_id")
+        # Gérer les compteurs sélectionnés (nouveau système : plusieurs compteurs possibles)
+        counter_ids_selected = []
+        counter_ids_raw = request.form.getlist("counter_ids[]")  # Liste de compteurs sélectionnés
         
-        # Si la machine n'a pas de compteur, un compteur de la machine racine est obligatoire
+        # Si aucun compteur sélectionné, vérifier l'ancien système (compatibilité)
+        if not counter_ids_raw:
+            counter_id_raw = request.form.get("counter_id")
+            if counter_id_raw and counter_id_raw != "" and counter_id_raw != "machine":
+                counter_ids_raw = [counter_id_raw]
+        
+        # Si la machine n'a pas de compteur, au moins un compteur de la machine racine est obligatoire
         if not has_own_counter:
-            if not counter_id_raw or counter_id_raw == "" or counter_id_raw == "machine":
-                flash("Vous devez sélectionner un compteur de la machine racine car cette machine n'a pas de compteur", "danger")
+            if not counter_ids_raw or all(cid == "" or cid == "machine" for cid in counter_ids_raw):
+                flash("Vous devez sélectionner au moins un compteur de la machine racine car cette machine n'a pas de compteur", "danger")
                 return redirect(request.url)
         
-        if counter_id_raw and counter_id_raw != "" and counter_id_raw != "machine":
+        # Traiter chaque compteur sélectionné
+        for counter_id_raw in counter_ids_raw:
+            if not counter_id_raw or counter_id_raw == "" or counter_id_raw == "machine":
+                # Compteur machine classique (None)
+                if has_own_counter:
+                    counter_ids_selected.append(None)  # None = compteur machine
+                continue
+            
             try:
                 counter_id = int(counter_id_raw)
                 # Vérifier que le compteur existe et appartient à la machine racine
                 counter = Counter.query.get(counter_id)
                 if counter:
                     if counter.machine_id != root_machine.id:
-                        flash("Compteur invalide", "danger")
+                        flash(f"Compteur invalide: {counter.name}", "danger")
                         return redirect(request.url)
+                    if counter_id not in counter_ids_selected:
+                        counter_ids_selected.append(counter_id)
                 else:
                     flash("Compteur introuvable", "danger")
                     return redirect(request.url)
             except (TypeError, ValueError):
                 flash("Valeur de compteur invalide", "danger")
                 return redirect(request.url)
-        # Si counter_id_raw est "machine" ou vide et que la machine a un compteur, counter_id reste None (utilise le compteur de la machine)
+        
+        # Si aucun compteur sélectionné et que la machine a un compteur, utiliser le compteur machine
+        if not counter_ids_selected and has_own_counter:
+            counter_ids_selected = [None]  # None = compteur machine
+        
+        # Si toujours aucun compteur, erreur
+        if not counter_ids_selected:
+            flash("Vous devez sélectionner au moins un compteur", "danger")
+            return redirect(request.url)
 
         components = []
         for label, field_type in zip(component_labels, component_types):
@@ -4466,9 +4524,18 @@ def new_maintenance():
             flash("Ajoutez au moins un élément de rapport", "danger")
             return redirect(request.url)
 
+        # Créer le plan (counter_id gardé pour compatibilité mais sera ignoré si report_counters existe)
+        counter_id = counter_ids_selected[0] if len(counter_ids_selected) == 1 else None
         report = PreventiveReport(name=name, periodicity=periodicity, machine_id=machine_id, counter_id=counter_id)
         report.components.extend(components)
         db.session.add(report)
+        db.session.flush()  # Pour obtenir l'ID du report
+        
+        # Créer les liaisons avec les compteurs
+        for counter_id_val in counter_ids_selected:
+            report_counter = PreventiveReportCounter(report_id=report.id, counter_id=counter_id_val)
+            db.session.add(report_counter)
+        
         try:
             db.session.commit()
             # Créer le MaintenanceProgress pour initialiser "avant maintenance"
@@ -7727,49 +7794,112 @@ def get_or_create_progress(machine: Machine, report: PreventiveReport):
 
 
 def ensure_all_progress_for_machine(machine: Machine):
-    # Récupérer les progress existants (par machine_id ou counter_id)
-    existing_by_machine = {
-        record.report_id: record
-        for record in MaintenanceProgress.query.filter_by(machine_id=machine.id, counter_id=None).all()
-    }
-    existing_by_counter = {}
-    
+    """Crée les MaintenanceProgress manquants pour une machine"""
     # Récupérer la machine racine pour vérifier ses compteurs
     root_machine = machine
     while root_machine.parent:
         root_machine = root_machine.parent
     
-    # Récupérer tous les progress avec counter_id pour cette machine
-    all_counter_progress = MaintenanceProgress.query.filter_by(machine_id=machine.id).filter(MaintenanceProgress.counter_id.isnot(None)).all()
-    for record in all_counter_progress:
-        existing_by_counter[record.report_id] = record
+    # Récupérer tous les progress existants (clé: (report_id, counter_id))
+    existing_progress = {}
+    all_existing = MaintenanceProgress.query.filter_by(machine_id=machine.id).all()
+    for record in all_existing:
+        key = (record.report_id, record.counter_id)
+        existing_progress[key] = record
     
     reports = PreventiveReport.query.filter_by(machine_id=machine.id).order_by(PreventiveReport.id).all()
     created = False
+    
     for report in reports:
-        # Déterminer si le report utilise un compteur spécifique
-        if report.counter_id:
-            # Utiliser counter_id (compteur de la machine racine)
-            if report.id not in existing_by_counter:
-                counter = Counter.query.get(report.counter_id)
-                initial_hours = report.periodicity if counter else 0.0
-                progress = MaintenanceProgress(machine=machine, counter_id=report.counter_id, report=report, hours_since=initial_hours)
-                db.session.add(progress)
-                existing_by_counter[report.id] = progress
-                created = True
+        # Nouveau système : utiliser report_counters si disponible
+        if report.report_counters:
+            # Plan avec plusieurs compteurs
+            for report_counter in report.report_counters:
+                counter_id = report_counter.counter_id
+                key = (report.id, counter_id)
+                
+                if key not in existing_progress:
+                    # Déterminer la valeur initiale selon le type de compteur
+                    if counter_id is None:
+                        # Compteur machine classique
+                        initial_hours = report.periodicity if machine.hour_counter_enabled else 0.0
+                    else:
+                        # Compteur multiple de la machine racine
+                        counter = Counter.query.get(counter_id)
+                        initial_hours = report.periodicity if counter else 0.0
+                    
+                    progress = MaintenanceProgress(
+                        machine=machine,
+                        counter_id=counter_id,
+                        report=report,
+                        hours_since=initial_hours
+                    )
+                    db.session.add(progress)
+                    existing_progress[key] = progress
+                    created = True
         else:
-            # Utiliser machine_id (compteur de la machine elle-même)
-            if report.id not in existing_by_machine:
-                initial_hours = report.periodicity if machine.hour_counter_enabled else 0.0
-                progress = MaintenanceProgress(machine=machine, report=report, hours_since=initial_hours)
-                db.session.add(progress)
-                existing_by_machine[report.id] = progress
-                created = True
+            # Ancien système : compatibilité avec counter_id unique
+            if report.counter_id:
+                # Compteur de la machine racine
+                counter_id = report.counter_id
+                key = (report.id, counter_id)
+                if key not in existing_progress:
+                    counter = Counter.query.get(counter_id)
+                    initial_hours = report.periodicity if counter else 0.0
+                    progress = MaintenanceProgress(machine=machine, counter_id=counter_id, report=report, hours_since=initial_hours)
+                    db.session.add(progress)
+                    existing_progress[key] = progress
+                    created = True
+            else:
+                # Compteur machine classique
+                counter_id = None
+                key = (report.id, counter_id)
+                if key not in existing_progress:
+                    initial_hours = report.periodicity if machine.hour_counter_enabled else 0.0
+                    progress = MaintenanceProgress(machine=machine, report=report, hours_since=initial_hours)
+                    db.session.add(progress)
+                    existing_progress[key] = progress
+                    created = True
+    
     if created:
         db.session.flush()
-    # Retourner tous les progress (machine et counter)
-    all_progress = list(existing_by_machine.values()) + list(existing_by_counter.values())
-    return all_progress
+    
+    return list(existing_progress.values())
+
+
+def get_report_min_hours_since(machine: Machine, report: PreventiveReport):
+    """Calcule le minimum des hours_since pour tous les compteurs liés à un plan"""
+    if report.report_counters:
+        # Nouveau système : plusieurs compteurs
+        min_hours = None
+        for report_counter in report.report_counters:
+            progress = MaintenanceProgress.query.filter_by(
+                machine_id=machine.id,
+                report_id=report.id,
+                counter_id=report_counter.counter_id
+            ).first()
+            
+            if progress:
+                if min_hours is None or progress.hours_since < min_hours:
+                    min_hours = progress.hours_since
+        
+        return min_hours if min_hours is not None else 0.0
+    else:
+        # Ancien système : compatibilité
+        if report.counter_id:
+            progress = MaintenanceProgress.query.filter_by(
+                machine_id=machine.id,
+                report_id=report.id,
+                counter_id=report.counter_id
+            ).first()
+        else:
+            progress = MaintenanceProgress.query.filter_by(
+                machine_id=machine.id,
+                report_id=report.id,
+                counter_id=None
+            ).first()
+        
+        return progress.hours_since if progress else 0.0
 
 
 @app.route("/maintenance-photo/<int:photo_id>/view")

@@ -1444,6 +1444,30 @@ def new_user():
     return render_template("user_form.html")
 
 
+@app.route("/users/<int:user_id>/reset-password", methods=["POST"])
+@admin_required
+def reset_user_password(user_id):
+    """Réinitialiser le mot de passe d'un utilisateur"""
+    user = User.query.get_or_404(user_id)
+    
+    if user.username == "admin123":
+        flash("Le mot de passe du compte admin par défaut ne peut pas être réinitialisé depuis cette interface", "danger")
+        return redirect(url_for("users"))
+    
+    # Réinitialiser le mot de passe à "123" par défaut
+    default_password = "123"
+    user.set_password(default_password)
+    
+    try:
+        db.session.commit()
+        flash(f"Mot de passe de {user.username} réinitialisé. Le nouveau mot de passe est : {default_password}", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Erreur lors de la réinitialisation : {exc}", "danger")
+    
+    return redirect(url_for("users"))
+
+
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
 @admin_required
 def delete_user(user_id):

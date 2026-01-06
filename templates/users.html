@@ -57,6 +57,17 @@
     border-color: #c82333;
     color: white;
   }
+  .btn-warning {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #000;
+    font-weight: 600;
+  }
+  .btn-warning:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+    color: #000;
+  }
   
   /* Responsive */
   @media (max-width: 768px) {
@@ -125,13 +136,22 @@
           <span class="badge bg-secondary">{{ user.user_type }}</span>
         </td>
         <td>
-          {% if user.username != "admin123" and user.id != current_user.id %}
-          <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cet utilisateur ?') }}');">
-            <button class="btn btn-danger btn-sm" type="submit">{{ t('Supprimer') }}</button>
-          </form>
-          {% else %}
-          <span class="text-muted">-</span>
-          {% endif %}
+          <div class="d-flex gap-2">
+            {% if user.username != "admin123" %}
+            <form method="post" action="{{ url_for('reset_user_password', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir réinitialiser le mot de passe de cet utilisateur ? Le nouveau mot de passe sera : 123') }}');">
+              <button class="btn btn-warning btn-sm" type="submit" title="{{ t('Réinitialiser le mot de passe') }}">
+                <i class="bi bi-key"></i> {{ t('Réinitialiser mot de passe') }}
+              </button>
+            </form>
+            {% endif %}
+            {% if user.username != "admin123" and user.id != current_user.id %}
+            <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer cet utilisateur ?') }}');">
+              <button class="btn btn-danger btn-sm" type="submit">{{ t('Supprimer') }}</button>
+            </form>
+            {% elif user.id == current_user.id %}
+            <span class="text-muted">-</span>
+            {% endif %}
+          </div>
         </td>
       </tr>
       {% endfor %}

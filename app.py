@@ -1399,6 +1399,50 @@ def set_language(lang):
     return redirect(request.referrer or url_for('index'))
 
 
+@app.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    """Permet à un utilisateur de modifier son propre mot de passe"""
+    if request.method == "POST":
+        current_password = request.form.get("current_password")
+        new_password = request.form.get("new_password")
+        confirm_password = request.form.get("confirm_password")
+        
+        # Vérifier que tous les champs sont remplis
+        if not current_password or not new_password or not confirm_password:
+            flash("Tous les champs sont requis", "danger")
+            return redirect(url_for("change_password"))
+        
+        # Vérifier que le mot de passe actuel est correct
+        if not current_user.check_password(current_password):
+            flash("Mot de passe actuel incorrect", "danger")
+            return redirect(url_for("change_password"))
+        
+        # Vérifier que les nouveaux mots de passe correspondent
+        if new_password != confirm_password:
+            flash("Les nouveaux mots de passe ne correspondent pas", "danger")
+            return redirect(url_for("change_password"))
+        
+        # Vérifier la longueur minimale
+        if len(new_password) < 3:
+            flash("Le mot de passe doit contenir au moins 3 caractères", "danger")
+            return redirect(url_for("change_password"))
+        
+        # Modifier le mot de passe
+        current_user.set_password(new_password)
+        
+        try:
+            db.session.commit()
+            flash("Mot de passe modifié avec succès", "success")
+            return redirect(url_for("index"))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Erreur lors de la modification : {exc}", "danger")
+            return redirect(url_for("change_password"))
+    
+    return render_template("change_password.html")
+
+
 @app.route("/users")
 @admin_required
 def users():

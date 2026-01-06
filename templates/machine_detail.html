@@ -697,6 +697,11 @@
                 <div class="btn-group w-100" role="group">
                   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('maintenance_detail', report_id=report.id) }}">{{ t('Voir') }}</a>
                   {% if can_edit_machines_maintenances() and not is_readonly_machines_maintenances() %}
+                  {% if can_edit_machines() and not is_readonly_machines_maintenances() %}
+                  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('edit_maintenance', report_id=report.id) }}" title="{{ t('Modifier le plan') }}">
+                    {{ icon_svg('edit', 16) }}
+                  </a>
+                  {% endif %}
                   <a class="btn btn-success btn-sm" href="{{ url_for('fill_maintenance', machine_id=machine.id, report_id=report.id) }}">{{ t('Remplir') }}</a>
                   {% endif %}
                 </div>

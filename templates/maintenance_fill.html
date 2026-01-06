@@ -135,6 +135,9 @@
   {% for component in report.components %}
   <div class="mb-3">
     <label class="form-label">{{ component.label }}</label>
+    {% if component.comment %}
+    <small class="form-text text-muted d-block mb-2" style="font-style: italic;">{{ component.comment }}</small>
+    {% endif %}
     {% set existing_value = existing_values.get(component.id) if existing_values else None %}
     {% if component.field_type == "number" %}
     <input class="form-control" type="number" step="0.01" name="component_{{ component.id }}" value="{% if existing_value %}{{ existing_value.value_number }}{% endif %}" required />

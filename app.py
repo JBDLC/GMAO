@@ -477,6 +477,7 @@ class PreventiveComponent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     report_id = db.Column(db.Integer, db.ForeignKey("preventive_report.id"), nullable=False)
     label = db.Column(db.String(150), nullable=False)
+    comment = db.Column(db.String(500), nullable=True)  # Commentaire optionnel pour l'élément
     field_type = db.Column(db.String(20), nullable=False)
 
     report = db.relationship("PreventiveReport", back_populates="components")
@@ -995,6 +996,17 @@ with app.app_context():
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE preventive_report ADD COLUMN counter_id INTEGER"))
                 conn.commit()
+    except Exception:
+        pass
+    # Migration pour ajouter comment à preventive_component
+    try:
+        inspector = inspect(db.engine)
+        if "preventive_component" in inspector.get_table_names():
+            preventive_component_columns = {col["name"] for col in inspector.get_columns("preventive_component")}
+            if "comment" not in preventive_component_columns:
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE preventive_component ADD COLUMN comment VARCHAR(500)"))
+                    conn.commit()
     except Exception:
         pass
     # Migration pour ajouter counter_id à maintenance_progress
@@ -4425,6 +4437,7 @@ def new_maintenance():
         periodicity_raw = request.form.get("periodicity")
         machine_id_raw = request.form.get("machine_id")
         component_labels = request.form.getlist("component_label")
+        component_comments = request.form.getlist("component_comment")
         component_types = request.form.getlist("component_type")
 
         try:
@@ -4514,11 +4527,21 @@ def new_maintenance():
             return redirect(request.url)
 
         components = []
-        for label, field_type in zip(component_labels, component_types):
-            label = label.strip()
+        # S'assurer que les listes ont la même longueur
+        max_len = max(len(component_labels), len(component_comments), len(component_types))
+        for i in range(max_len):
+            label = component_labels[i].strip() if i < len(component_labels) else ""
+            comment = component_comments[i].strip() if i < len(component_comments) else ""
+            field_type = component_types[i] if i < len(component_types) else ""
+            
             if not label or field_type not in {"number", "text", "checkbox"}:
                 continue
-            components.append(PreventiveComponent(label=label, field_type=field_type))
+            
+            components.append(PreventiveComponent(
+                label=label,
+                comment=comment if comment else None,
+                field_type=field_type
+            ))
 
         if not components:
             flash("Ajoutez au moins un élément de rapport", "danger")
@@ -4592,7 +4615,158 @@ def new_maintenance():
     # Récupérer tous les modèles existants pour la liste déroulante
     all_reports = PreventiveReport.query.order_by(PreventiveReport.name).all()
     
-    return render_template("maintenance_form.html", machines=machines_with_counter, selected_machine_id=selected_machine_id, selected_machine=selected_machine, all_reports=all_reports)
+    return render_template("maintenance_form.html", machines=machines_with_counter, selected_machine_id=selected_machine_id, selected_machine=selected_machine, all_reports=all_reports, report=None)
+
+
+@app.route("/maintenance/<int:report_id>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_maintenance(report_id):
+    """Modifier un plan de maintenance préventive"""
+    report = PreventiveReport.query.get_or_404(report_id)
+    machine = report.machine
+    
+    if request.method == "POST":
+        name = request.form["name"].strip()
+        periodicity_raw = request.form.get("periodicity")
+        component_labels = request.form.getlist("component_label")
+        component_comments = request.form.getlist("component_comment")
+        component_types = request.form.getlist("component_type")
+
+        try:
+            periodicity = int(periodicity_raw)
+        except (TypeError, ValueError):
+            periodicity = 0
+
+        if not name or periodicity <= 0:
+            flash("Nom et périodicité valide requis", "danger")
+            return redirect(request.url)
+
+        # Trouver la machine racine
+        root_machine = machine
+        while root_machine.parent:
+            root_machine = root_machine.parent
+        
+        # Gérer les compteurs sélectionnés
+        counter_ids_selected = []
+        counter_ids_raw = request.form.getlist("counter_ids[]")
+        
+        if not counter_ids_raw:
+            counter_id_raw = request.form.get("counter_id")
+            if counter_id_raw and counter_id_raw != "" and counter_id_raw != "machine":
+                counter_ids_raw = [counter_id_raw]
+        
+        has_own_counter = machine.hour_counter_enabled
+        
+        # Traiter chaque compteur sélectionné
+        for counter_id_raw in counter_ids_raw:
+            if not counter_id_raw or counter_id_raw == "" or counter_id_raw == "machine":
+                if has_own_counter:
+                    counter_ids_selected.append(None)
+                continue
+            
+            try:
+                counter_id = int(counter_id_raw)
+                counter = Counter.query.get(counter_id)
+                if counter:
+                    if counter.machine_id != root_machine.id:
+                        flash(f"Compteur invalide: {counter.name}", "danger")
+                        return redirect(request.url)
+                    if counter_id not in counter_ids_selected:
+                        counter_ids_selected.append(counter_id)
+                else:
+                    flash("Compteur introuvable", "danger")
+                    return redirect(request.url)
+            except (TypeError, ValueError):
+                flash("Valeur de compteur invalide", "danger")
+                return redirect(request.url)
+        
+        if not counter_ids_selected and has_own_counter:
+            counter_ids_selected = [None]
+        
+        if not counter_ids_selected:
+            flash("Vous devez sélectionner au moins un compteur", "danger")
+            return redirect(request.url)
+
+        # Mettre à jour le plan
+        report.name = name
+        report.periodicity = periodicity
+        
+        # Supprimer les anciens compteurs associés
+        PreventiveReportCounter.query.filter_by(report_id=report.id).delete()
+        
+        # Ajouter les nouveaux compteurs
+        for counter_id_val in counter_ids_selected:
+            report_counter = PreventiveReportCounter(report_id=report.id, counter_id=counter_id_val)
+            db.session.add(report_counter)
+        
+        # Supprimer les anciens composants
+        PreventiveComponent.query.filter_by(report_id=report.id).delete()
+        
+        # Créer les nouveaux composants
+        components = []
+        max_len = max(len(component_labels), len(component_comments), len(component_types))
+        for i in range(max_len):
+            label = component_labels[i].strip() if i < len(component_labels) else ""
+            comment = component_comments[i].strip() if i < len(component_comments) else ""
+            field_type = component_types[i] if i < len(component_types) else ""
+            
+            if not label or field_type not in {"number", "text", "checkbox"}:
+                continue
+            
+            components.append(PreventiveComponent(
+                report_id=report.id,
+                label=label,
+                comment=comment if comment else None,
+                field_type=field_type
+            ))
+        
+        if not components:
+            flash("Ajoutez au moins un élément de rapport", "danger")
+            return redirect(request.url)
+        
+        db.session.add_all(components)
+        
+        try:
+            db.session.commit()
+            # Mettre à jour les MaintenanceProgress si nécessaire
+            ensure_all_progress_for_machine(machine)
+            db.session.commit()
+            flash("Plan modifié avec succès", "success")
+            return redirect(get_machine_detail_url(machine.id, 'preventive'))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Erreur: {exc}", "danger")
+            return redirect(request.url)
+
+    # Récupérer les machines avec compteurs pour le formulaire
+    machines_with_counter = []
+    all_machines = Machine.query.order_by(Machine.name).all()
+    
+    for m in all_machines:
+        has_own_counter = m.hour_counter_enabled
+        root_m = m
+        while root_m.parent:
+            root_m = root_m.parent
+        has_root_counters = root_m.is_root() and root_m.counters
+        
+        if has_own_counter or has_root_counters:
+            machines_with_counter.append(m)
+    
+    # Récupérer les compteurs sélectionnés pour ce plan
+    selected_counter_ids = [rc.counter_id for rc in report.report_counters] if report.report_counters else ([report.counter_id] if report.counter_id else [None] if machine.hour_counter_enabled else [])
+    
+    # Récupérer tous les modèles existants pour la liste déroulante
+    all_reports = PreventiveReport.query.order_by(PreventiveReport.name).all()
+    
+    return render_template(
+        "maintenance_form.html",
+        machines=machines_with_counter,
+        selected_machine_id=machine.id,
+        selected_machine=machine,
+        all_reports=all_reports,
+        report=report,
+        selected_counter_ids=selected_counter_ids
+    )
 
 
 @app.route("/maintenance/<int:report_id>")
@@ -4793,6 +4967,7 @@ def get_report_components(report_id):
     for component in report.components:
         components.append({
             "label": component.label,
+            "comment": component.comment or "",
             "field_type": component.field_type
         })
     return json.dumps({"success": True, "components": components})

@@ -133,14 +133,14 @@
 </style>
 
 <div class="page-header">
-  <h1 class="page-title">Créer un modèle de maintenance préventive</h1>
+  <h1 class="page-title">{% if report %}Modifier{% else %}Créer{% endif %} un modèle de maintenance préventive</h1>
 </div>
 
 <div class="form-card">
-<form method="post" id="maintenanceForm">
+<form method="post" id="maintenanceForm" action="{% if report %}{{ url_for('edit_maintenance', report_id=report.id) }}{% else %}{{ url_for('new_maintenance') }}{% endif %}">
   <div class="mb-3">
     <label class="form-label">Machine</label>
-    <select class="form-select" name="machine_id" id="machineSelect" required>
+    <select class="form-select" name="machine_id" id="machineSelect" {% if report %}disabled{% else %}required{% endif %}>
       <option value="">Sélectionnez une machine...</option>
       {% for machine in machines %}
       <option value="{{ machine.id }}" {% if selected_machine_id == machine.id %}selected{% endif %}>
@@ -148,6 +148,9 @@
       </option>
       {% endfor %}
     </select>
+    {% if report %}
+    <small class="form-text text-muted">La machine ne peut pas être modifiée pour un plan existant.</small>
+    {% endif %}
   </div>
   <div class="mb-3 d-none" id="counterSelectContainer">
     <label class="form-label">Compteur(s) de référence pour la périodicité <span class="text-danger" id="counterRequired">*</span></label>
@@ -158,11 +161,11 @@
   </div>
   <div class="mb-3">
     <label class="form-label">Nom du rapport</label>
-    <input class="form-control" name="name" required />
+    <input class="form-control" name="name" value="{% if report %}{{ report.name }}{% endif %}" required />
   </div>
   <div class="mb-3">
     <label class="form-label">Périodicité</label>
-    <input class="form-control" type="number" min="1" name="periodicity" required />
+    <input class="form-control" type="number" min="1" name="periodicity" value="{% if report %}{{ report.periodicity }}{% endif %}" required />
   </div>
   <hr />
   <h4>Éléments du rapport</h4>
@@ -179,11 +182,39 @@
   </div>
   {% endif %}
   <div id="componentRows">
+    {% if report and report.components %}
+      {% for component in report.components %}
+      <div class="row g-2 mb-2 component-row">
+        <div class="col-md-4">
+          <input class="form-control" name="component_label" placeholder="Intitulé" value="{{ component.label }}" required />
+        </div>
+        <div class="col-md-4">
+          <input class="form-control" name="component_comment" placeholder="Commentaire (optionnel)" value="{{ component.comment or '' }}" />
+        </div>
+        <div class="col-md-3">
+          <select class="form-select" name="component_type" required>
+            <option value="">Type...</option>
+            <option value="number" {% if component.field_type == 'number' %}selected{% endif %}>Nombre</option>
+            <option value="text" {% if component.field_type == 'text' %}selected{% endif %}>Texte</option>
+            <option value="checkbox" {% if component.field_type == 'checkbox' %}selected{% endif %}>Tick box</option>
+          </select>
+        </div>
+        <div class="col-md-1 d-flex align-items-center">
+          <button type="button" class="btn btn-outline-danger btn-sm btn-remove-component" title="Supprimer cet élément">
+            <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
     <div class="row g-2 mb-2 component-row">
-      <div class="col-md-7">
+      <div class="col-md-4">
         <input class="form-control" name="component_label" placeholder="Intitulé" required />
       </div>
       <div class="col-md-4">
+        <input class="form-control" name="component_comment" placeholder="Commentaire (optionnel)" />
+      </div>
+      <div class="col-md-3">
         <select class="form-select" name="component_type" required>
           <option value="">Type...</option>
           <option value="number">Nombre</option>
@@ -197,6 +228,7 @@
         </button>
       </div>
     </div>
+    {% endif %}
   </div>
   <button class="btn btn-outline-secondary btn-sm mb-3" type="button" id="addComponent">+ Élément</button>
   <div class="mt-4">
@@ -214,7 +246,13 @@
     const template = rows.querySelector(".component-row");
     const clone = template.cloneNode(true);
     // Réinitialiser les valeurs des champs du clone
-    clone.querySelectorAll("input, select").forEach((el) => (el.value = ""));
+    clone.querySelectorAll("input, select").forEach((el) => {
+      if (el.type === "checkbox") {
+        el.checked = false;
+      } else {
+        el.value = "";
+      }
+    });
     rows.appendChild(clone);
   });
 
@@ -357,10 +395,12 @@
           
           // Remplir les champs
           const labelInput = row.querySelector('input[name="component_label"]');
+          const commentInput = row.querySelector('input[name="component_comment"]');
           const typeSelect = row.querySelector('select[name="component_type"]');
           
-          if (labelInput) labelInput.value = component.label;
-          if (typeSelect) typeSelect.value = component.field_type;
+          if (labelInput) labelInput.value = component.label || "";
+          if (commentInput) commentInput.value = component.comment || "";
+          if (typeSelect) typeSelect.value = component.field_type || "";
         });
       }
     } catch (error) {

@@ -4694,6 +4694,9 @@ def edit_maintenance(report_id):
             flash("Vous devez sélectionner au moins un compteur", "danger")
             return redirect(request.url)
 
+        # Sauvegarder l'ancienne périodicité pour recalculer les progress
+        old_periodicity = report.periodicity
+        
         # Mettre à jour le plan
         report.name = name
         report.periodicity = periodicity
@@ -4733,9 +4736,28 @@ def edit_maintenance(report_id):
         
         db.session.add_all(components)
         
+        # Recalculer les MaintenanceProgress existants si la périodicité a changé
+        if old_periodicity != periodicity and old_periodicity > 0:
+            # Récupérer tous les MaintenanceProgress pour ce plan et cette machine
+            all_progress = MaintenanceProgress.query.filter_by(
+                machine_id=machine.id,
+                report_id=report.id
+            ).all()
+            
+            for progress in all_progress:
+                # Recalculer proportionnellement
+                # Si on avait 12h sur 14h, et qu'on passe à 20h, on aura (12/14) * 20 = ~17.14h
+                if old_periodicity > 0:
+                    ratio = progress.hours_since / old_periodicity
+                    progress.hours_since = ratio * periodicity
+                    # S'assurer que la valeur reste cohérente
+                    # Si on était en retard (négatif), garder le ratio
+                    # Si on était au-delà de la périodicité, ajuster aussi
+                    db.session.add(progress)
+        
         try:
             db.session.commit()
-            # Mettre à jour les MaintenanceProgress si nécessaire
+            # Mettre à jour les MaintenanceProgress si nécessaire (créer les manquants)
             ensure_all_progress_for_machine(machine)
             db.session.commit()
             flash("Plan modifié avec succès", "success")
@@ -6219,7 +6241,7 @@ def counter_report(machine_id=None):
                 machines_updated.append(machine.name)
             
             elif item['type'] == 'machine_with_counters':
-                # Compteurs multiples pour machine racine
+                # Compteurs multiples (pour machine racine ou sous-machine)
                 machine = item['machine']
                 for counter in item['counters']:
                     raw_value = request.form.get(f"counter_{counter.id}")
@@ -7482,8 +7504,8 @@ def build_counter_hierarchy(machine, depth=0):
     # Vérifier si cette machine a des compteurs à afficher
     has_counters = False
     
-    # Compteurs multiples pour machines racines
-    if machine.is_root() and machine.counters:
+    # Compteurs multiples (pour machines racines ET sous-machines)
+    if machine.counters:
         counters_list = sorted(machine.counters, key=lambda c: c.name)
         if counters_list:
             has_counters = True
@@ -7494,8 +7516,8 @@ def build_counter_hierarchy(machine, depth=0):
                 'depth': depth
             })
     
-    # Compteur classique pour sous-machines
-    elif machine.hour_counter_enabled:
+    # Compteur classique pour machines avec hour_counter_enabled (sauf si déjà ajouté avec compteurs multiples)
+    if machine.hour_counter_enabled and not machine.counters:
         has_counters = True
         items.append({
             'type': 'machine_single_counter',

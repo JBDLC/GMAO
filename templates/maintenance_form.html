@@ -310,6 +310,16 @@
           checkbox.value = counter.id === null ? "machine" : counter.id;
           checkbox.id = `counter_${counter.id === null ? "machine" : counter.id}`;
           
+          // Pré-cocher si on est en mode édition et que ce compteur est sélectionné
+          {% if report and selected_counter_ids %}
+          const counterValue = counter.id === null ? null : counter.id;
+          {% for selected_id in selected_counter_ids %}
+          if (counterValue === {% if selected_id is none %}null{% else %}{{ selected_id }}{% endif %}) {
+            checkbox.checked = true;
+          }
+          {% endfor %}
+          {% endif %}
+          
           const label = document.createElement("label");
           label.className = "form-check-label";
           label.htmlFor = checkbox.id;

@@ -152,7 +152,7 @@
   </div>
 </div>
 
-{% if entry.machine.hour_counter_enabled %}
+{% if entry.machine.hour_counter_enabled or entry.triggered_counter_id or entry.report.report_counters %}
 {% set unit = entry.machine.counter_unit or 'h' %}
 <div class="info-card">
   <h5>Informations de compteur</h5>
@@ -171,6 +171,24 @@
           <span class="text-danger">0 {{ unit }} (due)</span>
           {% else %}
           {{ "%.1f"|format(entry.hours_before_maintenance) }} {{ unit }}
+          {% endif %}
+        </span>
+      </div>
+      {% endif %}
+      {% if entry.triggered_counter_id or (entry.triggered_counter_id is none and entry.machine.hour_counter_enabled) %}
+      <div class="col-md-12 mt-2">
+        <strong>Compteur ayant déclenché la maintenance :</strong><br>
+        <span class="text-muted">
+          {% if entry.triggered_counter_id and entry.triggered_counter %}
+          {{ entry.triggered_counter.name }}
+          {% elif entry.triggered_counter_id is none and entry.machine.hour_counter_enabled %}
+          Compteur de {{ entry.machine.name }}
+          {% elif entry.report.report_counters %}
+          {% set root_machine = entry.machine %}
+          {% while root_machine.parent %}
+            {% set root_machine = root_machine.parent %}
+          {% endwhile %}
+          Compteur de la machine racine {{ root_machine.name }}
           {% endif %}
         </span>
       </div>

@@ -491,10 +491,12 @@ class MaintenanceEntry(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     performed_hours = db.Column(db.Float, default=0.0)
     hours_before_maintenance = db.Column(db.Float)
+    triggered_counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # Compteur qui a déclenché la maintenance
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow, index=True)
 
     machine = db.relationship("Machine", backref="maintenance_entries")
     report = db.relationship("PreventiveReport")
+    triggered_counter = db.relationship("Counter", foreign_keys=[triggered_counter_id])
     stock = db.relationship("Stock")
     user = db.relationship("User")
     values = db.relationship(
@@ -913,6 +915,11 @@ with app.app_context():
         if "hours_before_maintenance" not in columns:
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE maintenance_entry ADD COLUMN hours_before_maintenance FLOAT"))
+                conn.commit()
+        if "triggered_counter_id" not in columns:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE maintenance_entry ADD COLUMN triggered_counter_id INTEGER"))
+                conn.commit()
     except Exception:
         pass
     try:
@@ -5031,9 +5038,15 @@ def fill_maintenance(machine_id, report_id):
     machine = Machine.query.get_or_404(machine_id)
     report = PreventiveReport.query.filter_by(id=report_id, machine_id=machine_id).first_or_404()
     
-    # Vérifier que la machine a un compteur horaire
-    if not machine.hour_counter_enabled:
-        flash("Seules les machines avec compteur horaire peuvent avoir des plans de maintenance préventive", "danger")
+    # Vérifier que la machine a un compteur OU que la machine racine a des compteurs
+    has_own_counter = machine.hour_counter_enabled
+    root_machine = machine
+    while root_machine.parent:
+        root_machine = root_machine.parent
+    has_root_counters = root_machine.is_root() and root_machine.counters
+    
+    if not has_own_counter and not has_root_counters:
+        flash("Seules les machines avec compteur horaire ou dont la machine racine a des compteurs peuvent avoir des plans de maintenance préventive", "danger")
         return redirect(get_machine_detail_url(machine_id, 'preventive'))
     
     stocks = Stock.query.order_by(Stock.name).all()
@@ -5148,12 +5161,58 @@ def fill_maintenance(machine_id, report_id):
                 return redirect(request.url)
             db.session.add(movement)
 
-        progress_record = None
-        if machine.hour_counter_enabled:
-            progress_record = get_or_create_progress(machine, report)
-            # Stocker l'heure avant maintenance avant de la réinitialiser
-            entry.hours_before_maintenance = progress_record.hours_since
-            progress_record.hours_since = report.periodicity
+        # Trouver le compteur qui a déclenché la maintenance (celui avec le hours_since le plus bas)
+        triggered_counter_id = None
+        triggered_hours_before = None
+        
+        if report.report_counters:
+            # Nouveau système : plusieurs compteurs
+            min_hours = None
+            min_counter_id = None
+            for report_counter in report.report_counters:
+                progress = MaintenanceProgress.query.filter_by(
+                    machine_id=machine.id,
+                    report_id=report.id,
+                    counter_id=report_counter.counter_id
+                ).first()
+                
+                if progress:
+                    if min_hours is None or progress.hours_since < min_hours:
+                        min_hours = progress.hours_since
+                        min_counter_id = report_counter.counter_id
+            
+            if min_counter_id is not None:
+                triggered_counter_id = min_counter_id
+                triggered_hours_before = min_hours
+                # Réinitialiser tous les compteurs du plan
+                for report_counter in report.report_counters:
+                    progress = MaintenanceProgress.query.filter_by(
+                        machine_id=machine.id,
+                        report_id=report.id,
+                        counter_id=report_counter.counter_id
+                    ).first()
+                    if progress:
+                        progress.hours_since = report.periodicity
+        else:
+            # Ancien système : compatibilité
+            if machine.hour_counter_enabled:
+                progress_record = get_or_create_progress(machine, report)
+                triggered_hours_before = progress_record.hours_since
+                progress_record.hours_since = report.periodicity
+            elif report.counter_id:
+                progress = MaintenanceProgress.query.filter_by(
+                    machine_id=machine.id,
+                    report_id=report.id,
+                    counter_id=report.counter_id
+                ).first()
+                if progress:
+                    triggered_counter_id = report.counter_id
+                    triggered_hours_before = progress.hours_since
+                    progress.hours_since = report.periodicity
+        
+        # Stocker les informations dans l'entrée
+        entry.hours_before_maintenance = triggered_hours_before
+        entry.triggered_counter_id = triggered_counter_id
 
         db.session.add(entry)
         try:
@@ -5290,9 +5349,15 @@ def edit_maintenance_entry(entry_id):
     machine = entry.machine
     report = entry.report
     
-    # Vérifier que la machine a un compteur horaire
-    if not machine.hour_counter_enabled:
-        flash("Seules les machines avec compteur horaire peuvent avoir des plans de maintenance préventive", "danger")
+    # Vérifier que la machine a un compteur OU que la machine racine a des compteurs
+    has_own_counter = machine.hour_counter_enabled
+    root_machine = machine
+    while root_machine.parent:
+        root_machine = root_machine.parent
+    has_root_counters = root_machine.is_root() and root_machine.counters
+    
+    if not has_own_counter and not has_root_counters:
+        flash("Seules les machines avec compteur horaire ou dont la machine racine a des compteurs peuvent avoir des plans de maintenance préventive", "danger")
         return redirect(url_for("machine_detail", machine_id=machine.id))
     
     stocks = Stock.query.order_by(Stock.name).all()

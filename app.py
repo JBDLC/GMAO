@@ -9309,38 +9309,6 @@ else:
     run_cleanup_scheduler()
 
 
-        flash("Accès refusé : vous ne pouvez supprimer que les photos que vous avez uploadées.", "danger")
-        if photo.maintenance_entry_id:
-            return redirect(url_for("maintenance_entry_detail", entry_id=photo.maintenance_entry_id))
-        else:
-            return redirect(url_for("corrective_maintenance_detail", maintenance_id=photo.corrective_maintenance_id))
-    
-    # Supprimer le fichier physique
-    try:
-        if os.path.exists(photo.file_path):
-            os.remove(photo.file_path)
-    except Exception as exc:
-        flash(f"Erreur lors de la suppression du fichier: {exc}", "warning")
-    
-    # Déterminer où rediriger
-    redirect_entry_id = photo.maintenance_entry_id
-    redirect_maintenance_id = photo.corrective_maintenance_id
-    
-    # Supprimer l'enregistrement en base de données
-    db.session.delete(photo)
-    try:
-        db.session.commit()
-        flash("Photo supprimée avec succès", "success")
-    except Exception as exc:
-        db.session.rollback()
-        flash(f"Erreur lors de la suppression: {exc}", "danger")
-    
-    if redirect_entry_id:
-        return redirect(url_for("maintenance_entry_detail", entry_id=redirect_entry_id))
-    else:
-        return redirect(url_for("corrective_maintenance_detail", maintenance_id=redirect_maintenance_id))
-
-
 @app.route("/checklists/manage")
 @login_required
 def checklists_manage():

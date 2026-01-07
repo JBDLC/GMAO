@@ -173,3 +173,23 @@
 
 
 
+
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info mt-3" style="background-color: #e3f2fd; border-color: #1a3b50; color: #1a3b50;">
+  <p class="mb-0">{{ t('Aucun utilisateur enregistré') }}.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+
+
+
+
+
+
+
+

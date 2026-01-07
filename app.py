@@ -1365,7 +1365,7 @@ def index():
         Machine.query
         .filter_by(parent_id=None)
         .options(joinedload(Machine.counters), joinedload(Machine.parent))
-        .order_by(Machine.name)
+        .order_by(Machine.code)
         .all()
     )
     
@@ -1661,7 +1661,7 @@ def machines():
         Machine.query
         .filter_by(parent_id=None)
         .options(joinedload(Machine.counters))
-        .order_by(Machine.name)
+        .order_by(Machine.code)
         .all()
     )
     
@@ -1735,7 +1735,7 @@ def machines():
     
     # Créer un dictionnaire pour mapper chaque machine racine à son color_index
     # Utiliser le color_index stocké dans la base de données
-    all_roots_ordered = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
+    all_roots_ordered = Machine.query.filter_by(parent_id=None).order_by(Machine.code).all()
     machine_color_map = {}
     for root in all_roots_ordered:
         machine_color_map[root.id] = root.color_index if root.color_index is not None else 0
@@ -1879,7 +1879,7 @@ def machine_detail(machine_id):
             .all()
         )
     
-    children = sorted(machine.children, key=lambda c: c.name)
+    children = sorted(machine.children, key=lambda c: c.code)
     
     # S'assurer que tous les MaintenanceProgress existent pour cette machine
     if has_counter:
@@ -2324,7 +2324,7 @@ def checklist_instance_detail(machine_id, template_id, instance_id):
 @app.route("/machines/new", methods=["GET", "POST"])
 @admin_required
 def new_machine():
-    parents = Machine.query.order_by(Machine.name).all()
+    parents = Machine.query.order_by(Machine.code).all()
     stocks = Stock.query.order_by(Stock.name).all()
     if request.method == "POST":
         name = request.form["name"].strip()
@@ -2449,7 +2449,7 @@ def new_machine():
 @admin_required
 def edit_machine(machine_id):
     machine = Machine.query.get_or_404(machine_id)
-    parents = Machine.query.filter(Machine.id != machine_id).order_by(Machine.name).all()
+    parents = Machine.query.filter(Machine.id != machine_id).order_by(Machine.code).all()
     stocks = Stock.query.order_by(Stock.name).all()
     
     if request.method == "POST":
@@ -2686,8 +2686,10 @@ def machine_counters(machine_id):
         flash("Les compteurs multiples sont uniquement disponibles pour les machines racines.", "danger")
         return redirect(url_for("machine_detail", machine_id=machine.id))
     
-    counters = Counter.query.filter_by(machine_id=machine_id).order_by(Counter.name).all()
-    return render_template("machine_counters.html", machine=machine, counters=counters)
+    # Construire la hiérarchie des compteurs comme dans counter_report
+    counter_hierarchy = build_counter_hierarchy(machine, depth=0)
+    
+    return render_template("machine_counters.html", machine=machine, counter_hierarchy=counter_hierarchy)
 
 
 @app.route("/machines/<int:machine_id>/counters/new", methods=["GET", "POST"])
@@ -4704,7 +4706,7 @@ def new_maintenance():
 
     # Montrer toutes les machines qui ont un compteur OU qui ont une machine racine avec des compteurs
     machines_with_counter = []
-    all_machines = Machine.query.order_by(Machine.name).all()
+    all_machines = Machine.query.order_by(Machine.code).all()
     
     for machine in all_machines:
         # Vérifier si la machine a son propre compteur
@@ -4949,7 +4951,7 @@ def edit_maintenance(report_id):
 
     # Récupérer les machines avec compteurs pour le formulaire
     machines_with_counter = []
-    all_machines = Machine.query.order_by(Machine.name).all()
+    all_machines = Machine.query.order_by(Machine.code).all()
     
     for m in all_machines:
         has_own_counter = m.hour_counter_enabled
@@ -6457,7 +6459,7 @@ def counter_report(machine_id=None):
             return redirect(url_for("machines"))
     else:
         # Comportement par défaut : toutes les machines racines avec leurs hiérarchies
-        all_root_machines = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
+        all_root_machines = Machine.query.filter_by(parent_id=None).order_by(Machine.code).all()
         for root in all_root_machines:
             root_hierarchy = build_counter_hierarchy(root, depth=0)
             counter_hierarchy.extend(root_hierarchy)
@@ -6870,7 +6872,7 @@ def maintenance_tracking():
     all_actions.sort(key=lambda x: x['date'], reverse=True)
     
     # Récupérer toutes les machines racines pour le filtre hiérarchique
-    root_machines = Machine.query.filter_by(parent_id=None).order_by(Machine.name).all()
+    root_machines = Machine.query.filter_by(parent_id=None).order_by(Machine.code).all()
     
     return render_template(
         "maintenance_tracking.html",
@@ -7150,7 +7152,7 @@ def export_modeles_excel():
 @admin_required
 def export_machines_excel():
     """Export Excel de l'arborescence des machines"""
-    machines = Machine.query.order_by(Machine.name).all()
+    machines = Machine.query.order_by(Machine.code).all()
     
     wb = Workbook()
     ws = wb.active
@@ -7747,7 +7749,7 @@ def reverse_movement_rules(movement: Movement):
 
 def build_machine_tree(node, level=0):
     yield node, level
-    for child in sorted(node.children, key=lambda c: c.name):
+    for child in sorted(node.children, key=lambda c: c.code):
         yield from build_machine_tree(child, level + 1)
 
 
@@ -7796,8 +7798,8 @@ def build_counter_hierarchy(machine, depth=0):
             'depth': depth
         })
     
-    # Parcourir récursivement les enfants (trier par nom pour un ordre cohérent)
-    for child in sorted(machine.children, key=lambda m: m.name):
+    # Parcourir récursivement les enfants (trier par code pour un ordre cohérent)
+    for child in sorted(machine.children, key=lambda m: m.code):
         items.extend(build_counter_hierarchy(child, depth + 1))
     
     return items
@@ -8516,6 +8518,797 @@ def delete_maintenance_photo(photo_id):
     
     # Vérifier les permissions : admin ou technicien qui a créé la photo
     if current_user.user_type != "admin" and (current_user.user_type != "technicien" or photo.user_id != current_user.id):
+        flash("Accès refusé : vous ne pouvez supprimer que les photos que vous avez uploadées.", "danger")
+        if photo.maintenance_entry_id:
+            return redirect(url_for("maintenance_entry_detail", entry_id=photo.maintenance_entry_id))
+        else:
+            return redirect(url_for("corrective_maintenance_detail", maintenance_id=photo.corrective_maintenance_id))
+    
+    # Supprimer le fichier physique
+    try:
+        if os.path.exists(photo.file_path):
+            os.remove(photo.file_path)
+    except Exception as exc:
+        flash(f"Erreur lors de la suppression du fichier: {exc}", "warning")
+    
+    # Déterminer où rediriger
+    redirect_entry_id = photo.maintenance_entry_id
+    redirect_maintenance_id = photo.corrective_maintenance_id
+    
+    # Supprimer l'enregistrement en base de données
+    db.session.delete(photo)
+    try:
+        db.session.commit()
+        flash("Photo supprimée avec succès", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Erreur lors de la suppression: {exc}", "danger")
+    
+    if redirect_entry_id:
+        return redirect(url_for("maintenance_entry_detail", entry_id=redirect_entry_id))
+    else:
+        return redirect(url_for("corrective_maintenance_detail", maintenance_id=redirect_maintenance_id))
+
+
+@app.route("/checklists/manage")
+@login_required
+def checklists_manage():
+    # Récupérer les paramètres de filtrage
+    filter_name = request.args.get('filter_name', '').strip().lower()
+    filter_date = request.args.get('filter_date', '').strip()
+    filter_machine = request.args.get('filter_machine', '').strip().lower()
+    filter_user = request.args.get('filter_user', '').strip().lower()
+    
+    # Récupérer toutes les check lists remplies (ChecklistInstance) avec les relations chargées
+    try:
+        entries = ChecklistInstance.query.options(
+            joinedload(ChecklistInstance.template),
+            joinedload(ChecklistInstance.machine),
+            joinedload(ChecklistInstance.user),
+        ).order_by(ChecklistInstance.created_at.desc()).all()
+    except Exception:
+        # En cas d'erreur, essayer sans joinedload
+        entries = ChecklistInstance.query.order_by(ChecklistInstance.created_at.desc()).all()
+    
+    # Créer une liste avec nom, machine, date, utilisateur et lien
+    checklists = []
+    
+    for entry in entries:
+        try:
+            # Vérifier que l'entrée existe
+            if not entry:
+                continue
+            
+            # Charger le template si nécessaire
+            template = entry.template if hasattr(entry, "template") else None
+            if not template and entry.template_id:
+                template = ChecklistTemplate.query.get(entry.template_id)
+            
+            if template:
+                # Charger la machine si nécessaire
+                machine = entry.machine if hasattr(entry, "machine") else None
+                if not machine and entry.machine_id:
+                    machine = Machine.query.get(entry.machine_id)
+                
+                # Charger l'utilisateur si nécessaire
+                user = entry.user if hasattr(entry, "user") else None
+                if not user and entry.user_id:
+                    user = User.query.get(entry.user_id)
+                
+                checklists.append(
+                    {
+                        "name": template.name,
+                        "date": entry.created_at,
+                        "machine": machine,
+                        "user": user,
+                        "id": entry.id,
+                        "url": url_for(
+                            "checklist_instance_detail",
+                            machine_id=entry.machine_id,
+                            template_id=entry.template_id,
+                            instance_id=entry.id,
+                        ),
+                    }
+                )
+        except Exception as e:
+            # Ignorer les entrées avec des erreurs
+            import traceback
+            print(f"Erreur lors du traitement de l'entrée {entry.id if entry else 'unknown'}: {e}")
+            traceback.print_exc()
+            continue
+    
+    # Appliquer les filtres
+    filtered_checklists = checklists
+    
+    if filter_name:
+        filtered_checklists = [c for c in filtered_checklists if filter_name in c['name'].lower()]
+    
+    if filter_date:
+        try:
+            # Essayer de parser la date (format attendu: YYYY-MM-DD ou DD/MM/YYYY)
+            filter_date_obj = None
+            if '/' in filter_date:
+                # Format DD/MM/YYYY
+                parts = filter_date.split('/')
+                if len(parts) == 3:
+                    filter_date_obj = dt.datetime(int(parts[2]), int(parts[1]), int(parts[0]))
+            else:
+                # Format YYYY-MM-DD
+                filter_date_obj = dt.datetime.strptime(filter_date, '%Y-%m-%d')
+            
+            if filter_date_obj:
+                filtered_checklists = [
+                    c for c in filtered_checklists
+                    if c['date'].date() == filter_date_obj.date()
+                ]
+        except (ValueError, AttributeError):
+            pass
+    
+    if filter_machine:
+        # Rechercher dans toute l'arborescence de la machine
+        filtered_checklists = [
+            c for c in filtered_checklists
+            if any(
+                filter_machine in node.name.lower() or filter_machine in (node.code or '').lower()
+                for node in machine_lineage(c['machine'])
+            )
+        ]
+    
+    if filter_user:
+        filtered_checklists = [
+            c for c in filtered_checklists
+            if c['user'] and filter_user in (c['user'].username or '').lower()
+        ]
+    
+    # Trier par date décroissante
+    filtered_checklists.sort(key=lambda x: x['date'], reverse=True)
+    
+    return render_template(
+        "checklists_manage.html",
+        checklists=filtered_checklists,
+        filter_name=filter_name,
+        filter_date=filter_date,
+        filter_machine=filter_machine,
+        filter_user=filter_user
+    )
+
+
+@app.route("/api/dashboard")
+@login_required
+def get_dashboard_data():
+    """API pour récupérer les données du tableau de bord"""
+    date_start_str = request.args.get('date_start', '')
+    date_end_str = request.args.get('date_end', '')
+    machine_ids_str = request.args.get('machine_ids', '')
+    metrics_str = request.args.get('metrics', '')
+    
+    # Parser les IDs de machines directement sélectionnées
+    selected_machine_ids = []
+    if machine_ids_str:
+        try:
+            selected_machine_ids = [int(id.strip()) for id in machine_ids_str.split(',') if id.strip()]
+        except (ValueError, TypeError):
+            pass
+    
+    # Parser les métriques
+    metrics = []
+    if metrics_str:
+        metrics = [m.strip() for m in metrics_str.split(',') if m.strip()]
+    
+    # Parser les dates
+    start_date = None
+    end_date = None
+    if date_start_str:
+        try:
+            start_date = dt.datetime.strptime(date_start_str, '%Y-%m-%d')
+        except (ValueError, TypeError):
+            pass
+    if date_end_str:
+        try:
+            # Ajouter 23h59m59s pour inclure toute la journée
+            end_date = dt.datetime.strptime(date_end_str, '%Y-%m-%d') + dt.timedelta(hours=23, minutes=59, seconds=59)
+        except (ValueError, TypeError):
+            pass
+    
+    # Récupérer toutes les machines suivies par l'utilisateur si aucune machine spécifiée
+    if not selected_machine_ids:
+        followed_machines = FollowedMachine.query.filter_by(user_id=current_user.id).all()
+        selected_machine_ids = [fm.machine_id for fm in followed_machines]
+    
+    # Si aucune machine, retourner des données vides
+    if not selected_machine_ids:
+        return jsonify({
+            'success': True,
+            'data': [],
+            'period': period
+        })
+    
+    # Récupérer les machines directement sélectionnées
+    selected_machines = Machine.query.filter(Machine.id.in_(selected_machine_ids)).all()
+    
+    results = []
+    
+    # Pour chaque machine directement sélectionnée, calculer les métriques en incluant toutes ses sous-machines
+    for machine in selected_machines:
+        # Récupérer toutes les sous-machines (descendants)
+        all_machines_in_tree = get_all_descendants(machine)
+        all_machine_ids_in_tree = [m.id for m in all_machines_in_tree]
+        machine_data = {
+            'machine_id': machine.id,
+            'machine_name': machine.name,
+            'machine_code': machine.code,
+            'metrics': {}
+        }
+        
+        # 1. Nombre de maintenances préventives (incluant toutes les sous-machines)
+        if not metrics or 'maintenances_preventives' in metrics:
+            query = MaintenanceEntry.query.filter(MaintenanceEntry.machine_id.in_(all_machine_ids_in_tree))
+            if start_date:
+                query = query.filter(MaintenanceEntry.created_at >= start_date)
+            if end_date:
+                query = query.filter(MaintenanceEntry.created_at <= end_date)
+            preventive_count = query.count()
+            machine_data['metrics']['maintenances_preventives'] = preventive_count
+        
+        # 2. Nombre de maintenances curatives (incluant toutes les sous-machines)
+        if not metrics or 'maintenances_curatives' in metrics:
+            query = CorrectiveMaintenance.query.filter(CorrectiveMaintenance.machine_id.in_(all_machine_ids_in_tree))
+            if start_date:
+                query = query.filter(CorrectiveMaintenance.created_at >= start_date)
+            if end_date:
+                query = query.filter(CorrectiveMaintenance.created_at <= end_date)
+            corrective_count = query.count()
+            machine_data['metrics']['maintenances_curatives'] = corrective_count
+        
+        # 3. Coût des produits utilisés (incluant toutes les sous-machines)
+        if not metrics or 'cout_produits' in metrics:
+            total_cost = 0.0
+            
+            # Coût pour les maintenances préventives (via mouvements)
+            query = MaintenanceEntry.query.filter(MaintenanceEntry.machine_id.in_(all_machine_ids_in_tree))
+            if start_date:
+                query = query.filter(MaintenanceEntry.created_at >= start_date)
+            if end_date:
+                query = query.filter(MaintenanceEntry.created_at <= end_date)
+            preventive_entries = query.all()
+            
+            for entry in preventive_entries:
+                if entry.stock_id:
+                    # Chercher les mouvements de sortie dans une fenêtre de 5 minutes
+                    time_window_start = entry.created_at - dt.timedelta(minutes=5)
+                    time_window_end = entry.created_at + dt.timedelta(minutes=5)
+                    
+                    movements = Movement.query.filter(
+                        Movement.type == 'sortie',
+                        Movement.source_stock_id == entry.stock_id,
+                        Movement.created_at >= time_window_start,
+                        Movement.created_at <= time_window_end
+                    ).all()
+                    
+                    for movement in movements:
+                        for item in movement.items:
+                            if item.product:
+                                total_cost += item.quantity * (item.product.price or 0.0)
+            
+            # Coût pour les maintenances curatives (via CorrectiveMaintenanceProduct)
+            query = CorrectiveMaintenance.query.filter(CorrectiveMaintenance.machine_id.in_(all_machine_ids_in_tree))
+            if start_date:
+                query = query.filter(CorrectiveMaintenance.created_at >= start_date)
+            if end_date:
+                query = query.filter(CorrectiveMaintenance.created_at <= end_date)
+            corrective_maintenances = query.all()
+            
+            for cm in corrective_maintenances:
+                for product_rel in cm.products:
+                    if product_rel.product:
+                        total_cost += product_rel.quantity * (product_rel.product.price or 0.0)
+            
+            machine_data['metrics']['cout_produits'] = round(total_cost, 2)
+        
+        # 4. Nombre de checklists (incluant toutes les sous-machines)
+        if not metrics or 'checklists' in metrics:
+            query = ChecklistInstance.query.filter(ChecklistInstance.machine_id.in_(all_machine_ids_in_tree))
+            if start_date:
+                query = query.filter(ChecklistInstance.created_at >= start_date)
+            if end_date:
+                query = query.filter(ChecklistInstance.created_at <= end_date)
+            checklist_count = query.count()
+            machine_data['metrics']['checklists'] = checklist_count
+        
+        # 5. Maintenances préventives en retard vs à l'heure (incluant toutes les sous-machines)
+        if not metrics or 'maintenances_retard' in metrics or 'maintenances_a_heure' in metrics:
+            query = MaintenanceEntry.query.filter(MaintenanceEntry.machine_id.in_(all_machine_ids_in_tree))
+            if start_date:
+                query = query.filter(MaintenanceEntry.created_at >= start_date)
+            if end_date:
+                query = query.filter(MaintenanceEntry.created_at <= end_date)
+            preventive_entries = query.all()
+            
+            on_time_count = 0
+            late_count = 0
+            
+            for entry in preventive_entries:
+                # Si hours_before_maintenance est négatif ou None, c'est en retard
+                if entry.hours_before_maintenance is not None:
+                    if entry.hours_before_maintenance < 0:
+                        late_count += 1
+                    else:
+                        on_time_count += 1
+                else:
+                    # Si pas d'info, considérer comme à l'heure
+                    on_time_count += 1
+            
+            if 'maintenances_retard' in (metrics or []):
+                machine_data['metrics']['maintenances_retard'] = late_count
+            if 'maintenances_a_heure' in (metrics or []):
+                machine_data['metrics']['maintenances_a_heure'] = on_time_count
+        
+        # 6. Nombre de mises à jour de compteur (incluant toutes les sous-machines)
+        if not metrics or 'mises_a_jour_compteur' in metrics:
+            query = CounterLog.query.filter(CounterLog.machine_id.in_(all_machine_ids_in_tree))
+            if start_date:
+                query = query.filter(CounterLog.created_at >= start_date)
+            if end_date:
+                query = query.filter(CounterLog.created_at <= end_date)
+            counter_count = query.count()
+            machine_data['metrics']['mises_a_jour_compteur'] = counter_count
+        
+        results.append(machine_data)
+    
+    return jsonify({
+        'success': True,
+        'data': results
+    })
+
+
+@app.route("/api/dashboard-chart")
+@login_required
+def get_dashboard_chart_data():
+    """API pour récupérer les données du tableau de bord groupées par période temporelle"""
+    date_start_str = request.args.get('date_start', '')
+    date_end_str = request.args.get('date_end', '')
+    machine_ids_str = request.args.get('machine_ids', '')
+    metrics_str = request.args.get('metrics', '')
+    
+    # Parser les IDs de machines directement sélectionnées
+    selected_machine_ids = []
+    if machine_ids_str:
+        try:
+            selected_machine_ids = [int(id.strip()) for id in machine_ids_str.split(',') if id.strip()]
+        except (ValueError, TypeError):
+            pass
+    
+    # Parser les métriques
+    metrics = []
+    if metrics_str:
+        metrics = [m.strip() for m in metrics_str.split(',') if m.strip()]
+    
+    # Parser les dates
+    start_date = None
+    end_date = None
+    if date_start_str:
+        try:
+            start_date = dt.datetime.strptime(date_start_str, '%Y-%m-%d')
+        except (ValueError, TypeError):
+            pass
+    if date_end_str:
+        try:
+            # Ajouter 23h59m59s pour inclure toute la journée
+            end_date = dt.datetime.strptime(date_end_str, '%Y-%m-%d') + dt.timedelta(hours=23, minutes=59, seconds=59)
+        except (ValueError, TypeError):
+            pass
+    
+    # Déterminer le groupement temporel selon la période
+    if start_date and end_date:
+        # S'assurer que end_date est après start_date
+        if end_date < start_date:
+            end_date, start_date = start_date, end_date
+        delta = end_date - start_date
+        if delta.days <= 31:
+            time_group = 'day'  # Grouper par jour pour les périodes courtes
+        elif delta.days <= 365:
+            time_group = 'week'  # Grouper par semaine pour les périodes moyennes
+        else:
+            time_group = 'month'  # Grouper par mois pour les périodes longues
+    elif start_date:
+        # Si seulement date de début, utiliser le groupement par défaut
+        time_group = 'month'
+    else:
+        # Si aucune date, utiliser le groupement par mois
+        time_group = 'month'
+    
+    # Récupérer toutes les machines suivies par l'utilisateur si aucune machine spécifiée
+    if not selected_machine_ids:
+        followed_machines = FollowedMachine.query.filter_by(user_id=current_user.id).all()
+        selected_machine_ids = [fm.machine_id for fm in followed_machines]
+    
+    # Si aucune machine, retourner des données vides
+    if not selected_machine_ids:
+        return jsonify({
+            'success': True,
+            'data': [],
+            'time_group': time_group
+        })
+    
+    # Récupérer les machines directement sélectionnées et leurs descendants
+    selected_machines = Machine.query.filter(Machine.id.in_(selected_machine_ids)).all()
+    all_machine_ids_in_trees = set()
+    for machine in selected_machines:
+        descendants = get_all_descendants(machine)
+        all_machine_ids_in_trees.update([m.id for m in descendants])
+        # Ajouter aussi la machine elle-même
+        all_machine_ids_in_trees.add(machine.id)
+    all_machine_ids_in_trees = list(all_machine_ids_in_trees)
+    
+    # Si aucune machine trouvée, retourner vide
+    if not all_machine_ids_in_trees:
+        return jsonify({
+            'success': True,
+            'data': [],
+            'time_group': time_group
+        })
+    
+    # Générer les périodes temporelles
+    periods = []
+    if start_date:
+        current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_limit = end_date if end_date else dt.datetime.utcnow()
+        while current <= end_limit:
+            if time_group == 'day':
+                periods.append(current.date())
+                current += dt.timedelta(days=1)
+            elif time_group == 'week':
+                # Premier jour de la semaine (lundi)
+                days_since_monday = current.weekday()
+                week_start = current - dt.timedelta(days=days_since_monday)
+                week_start_date = week_start.date()
+                if not periods or periods[-1] != week_start_date:
+                    periods.append(week_start_date)
+                current = week_start + dt.timedelta(days=7)
+            elif time_group == 'month':
+                # Premier jour du mois
+                periods.append(dt.date(current.year, current.month, 1))
+                # Passer au mois suivant
+                if current.month == 12:
+                    current = dt.datetime(current.year + 1, 1, 1)
+                else:
+                    current = dt.datetime(current.year, current.month + 1, 1)
+    else:
+        # Depuis le début : trouver la première date dans les données
+        first_dates = []
+        # Toujours vérifier toutes les sources de données pour trouver la première date
+        first_entry = MaintenanceEntry.query.filter(
+            MaintenanceEntry.machine_id.in_(all_machine_ids_in_trees)
+        ).order_by(MaintenanceEntry.created_at.asc()).first()
+        if first_entry:
+            first_dates.append(first_entry.created_at.date())
+        
+        first_corrective = CorrectiveMaintenance.query.filter(
+            CorrectiveMaintenance.machine_id.in_(all_machine_ids_in_trees)
+        ).order_by(CorrectiveMaintenance.created_at.asc()).first()
+        if first_corrective:
+            first_dates.append(first_corrective.created_at.date())
+        
+        first_checklist = ChecklistInstance.query.filter(
+            ChecklistInstance.machine_id.in_(all_machine_ids_in_trees)
+        ).order_by(ChecklistInstance.created_at.asc()).first()
+        if first_checklist:
+            first_dates.append(first_checklist.created_at.date())
+        
+        first_counter = CounterLog.query.filter(
+            CounterLog.machine_id.in_(all_machine_ids_in_trees)
+        ).order_by(CounterLog.created_at.asc()).first()
+        if first_counter:
+            first_dates.append(first_counter.created_at.date())
+        
+        if first_dates:
+            first_date = min(first_dates)
+            current = dt.datetime.combine(first_date, dt.time.min)
+            # Commencer au premier jour du mois de la première date
+            current = dt.datetime(current.year, current.month, 1)
+            now = dt.datetime.utcnow()
+            while current <= now:
+                periods.append(dt.date(current.year, current.month, 1))
+                if current.month == 12:
+                    current = dt.datetime(current.year + 1, 1, 1)
+                else:
+                    current = dt.datetime(current.year, current.month + 1, 1)
+        else:
+            # Pas de données, retourner vide
+            return jsonify({
+                'success': True,
+                'data': [],
+                'time_group': time_group
+            })
+    
+    results = []
+    
+    for period_date in periods:
+        period_start = dt.datetime.combine(period_date, dt.time.min)
+        if time_group == 'day':
+            period_end = period_start + dt.timedelta(days=1)
+            period_label = period_date.strftime('%d/%m/%Y')
+        elif time_group == 'week':
+            period_end = period_start + dt.timedelta(days=7)
+            period_label = period_date.strftime('%d/%m/%Y')
+        else:  # month
+            if period_date.month == 12:
+                period_end = dt.datetime(period_date.year + 1, 1, 1)
+            else:
+                period_end = dt.datetime(period_date.year, period_date.month + 1, 1)
+            period_label = period_date.strftime('%m/%Y')
+        
+        period_data = {
+            'period': period_date.isoformat(),
+            'period_label': period_label,
+            'metrics': {}
+        }
+        
+        # 1. Nombre de maintenances préventives
+        if not metrics or 'maintenances_preventives' in metrics:
+            query = MaintenanceEntry.query.filter(
+                MaintenanceEntry.machine_id.in_(all_machine_ids_in_trees),
+                MaintenanceEntry.created_at >= period_start,
+                MaintenanceEntry.created_at < period_end
+            )
+            preventive_count = query.count()
+            period_data['metrics']['maintenances_preventives'] = preventive_count
+        
+        # 2. Nombre de maintenances curatives
+        if not metrics or 'maintenances_curatives' in metrics:
+            query = CorrectiveMaintenance.query.filter(
+                CorrectiveMaintenance.machine_id.in_(all_machine_ids_in_trees),
+                CorrectiveMaintenance.created_at >= period_start,
+                CorrectiveMaintenance.created_at < period_end
+            )
+            corrective_count = query.count()
+            period_data['metrics']['maintenances_curatives'] = corrective_count
+        
+        # 3. Coût des produits utilisés
+        if not metrics or 'cout_produits' in metrics:
+            total_cost = 0.0
+            
+            # Coût pour les maintenances préventives (via mouvements)
+            preventive_entries = MaintenanceEntry.query.filter(
+                MaintenanceEntry.machine_id.in_(all_machine_ids_in_trees),
+                MaintenanceEntry.created_at >= period_start,
+                MaintenanceEntry.created_at < period_end
+            ).all()
+            
+            for entry in preventive_entries:
+                if entry.stock_id:
+                    time_window_start = entry.created_at - dt.timedelta(minutes=5)
+                    time_window_end = entry.created_at + dt.timedelta(minutes=5)
+                    
+                    movements = Movement.query.filter(
+                        Movement.type == 'sortie',
+                        Movement.source_stock_id == entry.stock_id,
+                        Movement.created_at >= time_window_start,
+                        Movement.created_at <= time_window_end
+                    ).all()
+                    
+                    for movement in movements:
+                        for item in movement.items:
+                            if item.product:
+                                total_cost += item.quantity * (item.product.price or 0.0)
+            
+            # Coût pour les maintenances curatives
+            corrective_maintenances = CorrectiveMaintenance.query.filter(
+                CorrectiveMaintenance.machine_id.in_(all_machine_ids_in_trees),
+                CorrectiveMaintenance.created_at >= period_start,
+                CorrectiveMaintenance.created_at < period_end
+            ).all()
+            
+            for cm in corrective_maintenances:
+                for product_rel in cm.products:
+                    if product_rel.product:
+                        total_cost += product_rel.quantity * (product_rel.product.price or 0.0)
+            
+            period_data['metrics']['cout_produits'] = round(total_cost, 2)
+        
+        # 4. Nombre de checklists
+        if not metrics or 'checklists' in metrics:
+            query = ChecklistInstance.query.filter(
+                ChecklistInstance.machine_id.in_(all_machine_ids_in_trees),
+                ChecklistInstance.created_at >= period_start,
+                ChecklistInstance.created_at < period_end
+            )
+            checklist_count = query.count()
+            period_data['metrics']['checklists'] = checklist_count
+        
+        # 5. Maintenances préventives en retard vs à l'heure
+        if not metrics or 'maintenances_retard' in metrics or 'maintenances_a_heure' in metrics:
+            preventive_entries = MaintenanceEntry.query.filter(
+                MaintenanceEntry.machine_id.in_(all_machine_ids_in_trees),
+                MaintenanceEntry.created_at >= period_start,
+                MaintenanceEntry.created_at < period_end
+            ).all()
+            
+            on_time_count = 0
+            late_count = 0
+            
+            for entry in preventive_entries:
+                if entry.hours_before_maintenance is not None:
+                    if entry.hours_before_maintenance < 0:
+                        late_count += 1
+                    else:
+                        on_time_count += 1
+                else:
+                    on_time_count += 1
+            
+            if 'maintenances_retard' in (metrics or []):
+                period_data['metrics']['maintenances_retard'] = late_count
+            if 'maintenances_a_heure' in (metrics or []):
+                period_data['metrics']['maintenances_a_heure'] = on_time_count
+        
+        # 6. Nombre de mises à jour de compteur
+        if not metrics or 'mises_a_jour_compteur' in metrics:
+            query = CounterLog.query.filter(
+                CounterLog.machine_id.in_(all_machine_ids_in_trees),
+                CounterLog.created_at >= period_start,
+                CounterLog.created_at < period_end
+            )
+            counter_count = query.count()
+            period_data['metrics']['mises_a_jour_compteur'] = counter_count
+        
+        results.append(period_data)
+    
+    return jsonify({
+        'success': True,
+        'data': results,
+        'time_group': time_group
+    })
+
+
+@app.route("/chat")
+@login_required
+def chat_full_page():
+    """Page complète dédiée au chat et informations"""
+    return render_template("chat_full.html")
+
+
+# Routes pour la gestion des fichiers Excel
+@app.route("/database-export/excel/upload", methods=["POST"])
+@admin_required
+def upload_excel_file():
+    """Uploader un fichier Excel"""
+    if 'file' not in request.files:
+        flash("Aucun fichier sélectionné", "danger")
+        return redirect(url_for("database_export"))
+    
+    file = request.files['file']
+    name = request.form.get('name', '').strip()
+    
+    if file.filename == '':
+        flash("Aucun fichier sélectionné", "danger")
+        return redirect(url_for("database_export"))
+    
+    if not name:
+        flash("Veuillez donner un nom au fichier", "danger")
+        return redirect(url_for("database_export"))
+    
+    # Vérifier l'extension
+    filename = file.filename
+    if '.' not in filename:
+        flash("Fichier invalide : extension manquante", "danger")
+        return redirect(url_for("database_export"))
+    
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext not in ALLOWED_EXCEL_EXTENSIONS:
+        flash(f"Format de fichier non autorisé. Formats acceptés : {', '.join(ALLOWED_EXCEL_EXTENSIONS)}", "danger")
+        return redirect(url_for("database_export"))
+    
+    try:
+        # Générer un nom de fichier unique
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename = secure_filename(filename)
+        unique_filename = f"{timestamp}_{safe_filename}"
+        file_path = EXCEL_FILES_FOLDER / unique_filename
+        
+        # Sauvegarder le fichier
+        file.save(str(file_path))
+        
+        # Créer l'entrée en base de données
+        excel_file = ExcelFile(
+            name=name,
+            filename=unique_filename,
+            original_filename=filename,
+            user_id=current_user.id
+        )
+        db.session.add(excel_file)
+        db.session.commit()
+        
+        flash(f"Fichier '{name}' uploadé avec succès", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de l'upload : {str(e)}", "danger")
+    
+    return redirect(url_for("database_export"))
+
+
+@app.route("/database-export/excel/<int:file_id>/download")
+@admin_required
+def download_excel_file(file_id):
+    """Télécharger un fichier Excel"""
+    excel_file = ExcelFile.query.get_or_404(file_id)
+    file_path = EXCEL_FILES_FOLDER / excel_file.filename
+    
+    if not file_path.exists():
+        flash("Fichier introuvable", "danger")
+        return redirect(url_for("database_export"))
+    
+    return send_from_directory(
+        str(EXCEL_FILES_FOLDER),
+        excel_file.filename,
+        as_attachment=True,
+        download_name=excel_file.original_filename
+    )
+
+
+@app.route("/database-export/excel/<int:file_id>/delete", methods=["POST"])
+@admin_required
+def delete_excel_file(file_id):
+    """Supprimer un fichier Excel"""
+    excel_file = ExcelFile.query.get_or_404(file_id)
+    file_path = EXCEL_FILES_FOLDER / excel_file.filename
+    
+    try:
+        # Supprimer le fichier du disque
+        if file_path.exists():
+            file_path.unlink()
+        
+        # Supprimer l'entrée en base de données
+        db.session.delete(excel_file)
+        db.session.commit()
+        
+        flash(f"Fichier '{excel_file.name}' supprimé avec succès", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de la suppression : {str(e)}", "danger")
+    
+    return redirect(url_for("database_export"))
+
+
+def run_cleanup_scheduler():
+    """Lance le scheduler de nettoyage automatique en arrière-plan"""
+    def cleanup_loop():
+        while True:
+            try:
+                # Exécuter le nettoyage toutes les heures
+                cleanup_old_reports()
+                cleanup_old_chat_messages()
+            except Exception as exc:
+                print(f"Erreur dans le scheduler de nettoyage: {exc}")
+            # Attendre 1 heure avant le prochain nettoyage
+            time.sleep(3600)
+    
+    # Démarrer le thread de nettoyage
+    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
+    cleanup_thread.start()
+    print("Scheduler de nettoyage automatique démarré (nettoyage toutes les heures)")
+
+
+# Importer les routes API pour l'application mobile
+try:
+    import api_routes
+except ImportError:
+    pass  # Si le fichier n'existe pas, continuer sans erreur
+
+# Importer la documentation Swagger
+try:
+    import swagger_docs
+except ImportError:
+    pass  # Si le fichier n'existe pas, continuer sans erreur
+
+if __name__ == "__main__":
+    # Démarrer le scheduler de nettoyage
+    run_cleanup_scheduler()
+    app.run(debug=True)
+else:
+    # Pour Gunicorn et autres serveurs WSGI
+    run_cleanup_scheduler()
+
+
         flash("Accès refusé : vous ne pouvez supprimer que les photos que vous avez uploadées.", "danger")
         if photo.maintenance_entry_id:
             return redirect(url_for("maintenance_entry_detail", entry_id=photo.maintenance_entry_id))

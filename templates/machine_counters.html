@@ -30,6 +30,10 @@
   }
   .table {
     margin-bottom: 0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
   }
   .table thead th {
     color: #1a3b50;
@@ -63,6 +67,87 @@
   .btn-outline-danger:hover {
     background-color: #dc3545;
     color: white;
+  }
+  
+  /* Styles pour l'indentation hiérarchique */
+  .hierarchy-indent {
+    display: inline-block;
+    width: 20px;
+  }
+  .hierarchy-line {
+    color: #6c757d;
+    margin-right: 8px;
+    font-size: 1.1em;
+    font-weight: 300;
+  }
+  .machine-row-level-0 {
+    background: linear-gradient(90deg, rgba(26, 59, 80, 0.08) 0%, rgba(26, 59, 80, 0.03) 100%) !important;
+    border-left: 3px solid #1a3b50;
+    font-weight: 600;
+  }
+  .machine-row-level-1 {
+    background: linear-gradient(90deg, rgba(26, 59, 80, 0.05) 0%, rgba(26, 59, 80, 0.02) 100%) !important;
+    border-left: 3px solid rgba(26, 59, 80, 0.4);
+  }
+  .machine-row-level-2 {
+    background: linear-gradient(90deg, rgba(108, 117, 125, 0.04) 0%, rgba(108, 117, 125, 0.01) 100%) !important;
+    border-left: 2px solid rgba(108, 117, 125, 0.3);
+  }
+  .machine-row-level-3 {
+    background-color: #ffffff !important;
+    border-left: 2px solid rgba(173, 181, 189, 0.2);
+  }
+  .counter-row {
+    background-color: #f8f9fa !important;
+    font-size: 0.95em;
+    border-left: 2px solid rgba(26, 59, 80, 0.15);
+    transition: background-color 0.2s;
+  }
+  .counter-row:hover {
+    background-color: #e9ecef !important;
+  }
+  .counter-row td {
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  .level-separator {
+    height: 2px;
+    background: linear-gradient(to right, transparent, rgba(26, 59, 80, 0.2), transparent);
+    border: none;
+    margin: 8px 0;
+  }
+  .machine-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background-color: rgba(26, 59, 80, 0.15);
+    color: #1a3b50;
+    font-size: 0.75em;
+    font-weight: 600;
+    margin-left: 8px;
+    border: 1px solid rgba(26, 59, 80, 0.2);
+  }
+  .counter-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background-color: rgba(108, 117, 125, 0.12);
+    color: #495057;
+    font-size: 0.7em;
+    font-weight: 500;
+    margin-left: 6px;
+    border: 1px solid rgba(108, 117, 125, 0.2);
+  }
+  .machine-name-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .counter-type-indicator {
+    font-size: 0.7em;
+    color: #6c757d;
+    font-weight: 400;
+    font-style: italic;
   }
   
   /* Responsive */
@@ -104,49 +189,135 @@
   </nav>
   <div class="d-flex justify-content-between align-items-center">
     <h1 class="page-title">{{ t('Compteurs de') }} {{ machine.name }}</h1>
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item"><a href="{{ url_for('machines') }}">{{ t('Machines') }}</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('machine_detail', machine_id=machine.id) }}">{{ machine.name }}</a></li>
-        <li class="breadcrumb-item active">{{ t('Compteurs') }}</li>
-      </ol>
-    </nav>
     <a href="{{ url_for('new_counter', machine_id=machine.id) }}" class="btn btn-primary">+ {{ t('Nouveau compteur') }}</a>
   </div>
 </div>
 
-{% if counters %}
+{% if counter_hierarchy %}
 <div class="card mt-3">
   <div class="card-body">
     <div class="table-responsive">
-      <table class="table">
+      <table class="table align-middle">
         <thead>
           <tr>
-            <th>{{ t('Nom') }}</th>
-            <th>{{ t('Valeur') }}</th>
+            <th>{{ t('Machine / Compteur') }}</th>
+            <th>{{ t('Code') }}</th>
+            <th>{{ t('Valeur actuelle') }}</th>
             <th>{{ t('Unité') }}</th>
-            <th>{{ t('Type') }}</th>
             <th>{{ t('Actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          {% for counter in counters %}
-          <tr>
-            <td><strong>{{ counter.name }}</strong></td>
-            <td>{{ "%.1f"|format(counter.value) }}</td>
-            <td>{{ counter.unit or 'h' }}</td>
-            <td>
-              <span class="badge bg-secondary">{{ t('Manuel') }}</span>
-            </td>
-            <td>
-              <div class="btn-group">
-                <a href="{{ url_for('edit_counter', machine_id=machine.id, counter_id=counter.id) }}" class="btn btn-sm btn-outline-primary" title="Modifier"><img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="Modifier" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></a>
-                <form method="post" action="{{ url_for('delete_counter', machine_id=machine.id, counter_id=counter.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce compteur ?') }}');">
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
-                </form>
-              </div>
-            </td>
-          </tr>
+          {% set current_depth = -1 %}
+          {% set current_machine_id = None %}
+          {% for item in counter_hierarchy %}
+            {% set depth = item.depth %}
+            {% set machine_item = item.machine %}
+            
+            {# Ajouter un séparateur visuel si on change de machine racine ou si on remonte dans la hiérarchie #}
+            {% if current_machine_id is not none and (machine_item.id != current_machine_id or depth < current_depth) %}
+              <tr>
+                <td colspan="5" class="level-separator"></td>
+              </tr>
+            {% endif %}
+            
+            {% if item.type == 'machine_with_counters' %}
+              {# Machine avec compteurs multiples (racine ou sous-machine) #}
+              {% set padding_left = depth * 30 %}
+              {% set is_root = depth == 0 %}
+              <tr class="machine-row-level-{{ depth if depth <= 3 else 3 }}">
+                <td style="padding: 16px; padding-left: {{ padding_left }}px;">
+                  <div class="machine-name-header">
+                    {% if depth > 0 %}
+                      <span class="hierarchy-line">└─</span>
+                    {% endif %}
+                    <span style="color: #1a3b50; font-size: {% if is_root %}1.2em{% else %}1.05em{% endif %}; font-weight: 600;">
+                      {{ machine_item.name }}
+                    </span>
+                    <span class="machine-badge">
+                      {{ item.counters|length }} {% if item.counters|length > 1 %}{{ t('compteurs') }}{% else %}{{ t('compteur') }}{% endif %}
+                    </span>
+                    {% if not is_root %}
+                      <span class="counter-type-indicator">({{ t('Sous-machine') }})</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td style="padding: 16px; {% if is_root %}font-weight: 600; color: #1a3b50;{% else %}color: #6c757d;{% endif %}">
+                  {{ machine_item.code }}
+                </td>
+                <td colspan="3" style="padding: 16px; color: #6c757d; font-size: 0.9em; font-style: italic;">
+                  {{ t('Voir les compteurs ci-dessous') }}
+                </td>
+              </tr>
+              {# Afficher tous les compteurs de cette machine directement en dessous #}
+              {% for counter in item.counters %}
+                {% set unit = counter.unit or 'h' %}
+                <tr class="counter-row">
+                  <td style="padding: 12px; padding-left: {{ padding_left + 40 }}px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                      <span class="hierarchy-line">└─</span> 
+                      <span style="color: #1a3b50; font-weight: 500;">{{ counter.name }}</span>
+                      <span class="counter-badge">{{ machine_item.code }}</span>
+                    </div>
+                  </td>
+                  <td style="padding: 12px; color: #6c757d; font-size: 0.9em;">{{ machine_item.code }}</td>
+                  <td style="padding: 12px; font-weight: 500; color: #495057;">
+                    {{ "%.1f"|format(counter.value) }}
+                  </td>
+                  <td style="padding: 12px; color: #6c757d; font-size: 0.9em;">{{ unit }}</td>
+                  <td style="padding: 12px;">
+                    {% if machine_item.id == machine.id %}
+                    <div class="btn-group">
+                      <a href="{{ url_for('edit_counter', machine_id=machine_item.id, counter_id=counter.id) }}" class="btn btn-sm btn-outline-primary" title="{{ t('Modifier') }}">
+                        <img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="{{ t('Modifier') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+                      </a>
+                      <form method="post" action="{{ url_for('delete_counter', machine_id=machine_item.id, counter_id=counter.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce compteur ?') }}');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer') }}">
+                          <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="{{ t('Supprimer') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+                        </button>
+                      </form>
+                    </div>
+                    {% else %}
+                    <span class="text-muted" style="font-size: 0.85em;">{{ t('Sous-machine') }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% elif item.type == 'machine_single_counter' %}
+              {# Machine avec compteur classique unique #}
+              {% set unit = machine_item.counter_unit or 'h' %}
+              {% set padding_left = depth * 30 %}
+              {% set is_root = depth == 0 %}
+              <tr class="machine-row-level-{{ depth if depth <= 3 else 3 }}">
+                <td style="padding: 16px; padding-left: {{ padding_left }}px;">
+                  <div class="machine-name-header">
+                    {% if depth > 0 %}
+                      <span class="hierarchy-line">└─</span>
+                    {% endif %}
+                    <span style="color: #1a3b50; font-size: {% if is_root %}1.2em{% else %}1.05em{% endif %}; font-weight: 600;">
+                      {{ machine_item.name }}
+                    </span>
+                    <span class="counter-badge">{{ "%.1f"|format(machine_item.hours) }} {{ unit }}</span>
+                    {% if not is_root %}
+                      <span class="counter-type-indicator">({{ t('Sous-machine') }})</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td style="padding: 16px; {% if is_root %}font-weight: 600; color: #1a3b50;{% else %}color: #6c757d;{% endif %}">
+                  {{ machine_item.code }}
+                </td>
+                <td style="padding: 16px; font-weight: 500; color: #495057;">
+                  {{ "%.1f"|format(machine_item.hours) }}
+                </td>
+                <td style="padding: 16px; color: #6c757d; font-size: 0.9em;">{{ unit }}</td>
+                <td style="padding: 16px;">
+                  <span class="text-muted" style="font-size: 0.85em;">{{ t('Compteur machine') }}</span>
+                </td>
+              </tr>
+            {% endif %}
+            
+            {% set current_depth = depth %}
+            {% set current_machine_id = machine_item.id %}
           {% endfor %}
         </tbody>
       </table>
@@ -155,7 +326,7 @@
 </div>
 {% else %}
 <div class="alert alert-info">
-  <p class="mb-0">{{ t('Aucun compteur configuré pour cette machine racine.') }}</p>
+  <p class="mb-0">{{ t('Aucun compteur configuré dans l\'arborescence de cette machine.') }}</p>
   <p class="mb-0 mt-2"><a href="{{ url_for('new_counter', machine_id=machine.id) }}" class="btn btn-primary btn-sm">{{ t('Créer le premier compteur') }}</a></p>
 </div>
 {% endif %}
@@ -164,4 +335,3 @@
   <a href="{{ url_for('machine_detail', machine_id=machine.id) }}" class="btn btn-secondary">{{ t('Retour à la machine') }}</a>
 </div>
 {% endblock %}
-

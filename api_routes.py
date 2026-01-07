@@ -84,7 +84,7 @@ def api_get_machines():
         joinedload(Machine.children),
         joinedload(Machine.counters),
         joinedload(Machine.stock)
-    ).order_by(Machine.name).all()
+    ).order_by(Machine.code).all()
     
     def serialize_machine(machine, level=0):
         """Sérialiser une machine récursivement"""
@@ -107,7 +107,7 @@ def api_get_machines():
                 'value': c.value,
                 'unit': c.unit
             } for c in machine.counters],
-            'children': [serialize_machine(child, level + 1) for child in sorted(machine.children, key=lambda x: x.name)]
+            'children': [serialize_machine(child, level + 1) for child in sorted(machine.children, key=lambda x: x.code)]
         }
     
     machines = []
@@ -193,7 +193,7 @@ def api_get_machine(machine_id):
                 'id': c.id,
                 'name': c.name,
                 'code': c.code
-            } for c in sorted(machine.children, key=lambda x: x.name)]
+            } for c in sorted(machine.children, key=lambda x: x.code)]
         },
         'preventive_maintenances': [{
             'id': e.id,

@@ -5,7 +5,7 @@
   <option value="{{ machine.id }}" {% if selected_id == machine.id %}selected{% endif %}>
     {{ prefix }}{{ machine.name }} ({{ machine.code }})
   </option>
-  {% for child in machine.children|sort(attribute='name') %}
+  {% for child in machine.children|sort(attribute='code') %}
     {{ render_machine_option(child, selected_id, prefix + '└─ ') }}
   {% endfor %}
 {% endmacro %}

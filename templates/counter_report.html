@@ -404,3 +404,58 @@
 </div>
 {% endblock %}
 
+
+</form>
+</div>
+
+<div class="collapse mt-4" id="counterHistory">
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Historique des relevés</strong>
+      <a class="btn btn-sm btn-link" href="{{ url_for('counter_logs') }}">Voir plus</a>
+    </div>
+    <div class="card-body p-0">
+      {% if logs %}
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Machine</th>
+              <th>Code</th>
+              <th>Compteur</th>
+              <th>Ancien</th>
+              <th>Nouveau</th>
+              <th>Différence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+            {% if log.counter %}
+              {% set counter_name = log.counter.name %}
+              {% set unit = log.counter.unit or 'h' %}
+            {% else %}
+              {% set counter_name = "Compteur machine" %}
+              {% set unit = log.machine.counter_unit or 'h' %}
+            {% endif %}
+            <tr>
+              <td>{{ log.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+              <td>{{ log.machine.name }}</td>
+              <td>{{ log.machine.code }}</td>
+              <td>{{ counter_name }}</td>
+              <td>{{ "%.1f"|format(log.previous_hours) }} {{ unit }}</td>
+              <td>{{ "%.1f"|format(log.new_hours) }} {{ unit }}</td>
+              <td>{{ "%.1f"|format(log.new_hours - log.previous_hours) }} {{ unit }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="m-3 text-muted">Aucun relevé pour le moment.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+

@@ -543,3 +543,198 @@
 </script>
 {% endblock %}
 
+
+          label.htmlFor = checkbox.id;
+          label.textContent = counter.name + ` (${counter.value} ${counter.unit})`;
+          
+          div.appendChild(checkbox);
+          div.appendChild(label);
+          countersList.appendChild(div);
+        });
+        
+        // Ajouter les event listeners pour valider les unités
+        updateUnitValidation();
+        
+        // Si la machine n'a pas de compteur, au moins un compteur est obligatoire
+        if (!hasMachineCounter) {
+          document.getElementById("counterRequired").style.display = "inline";
+        } else {
+          document.getElementById("counterRequired").style.display = "none";
+        }
+      } else {
+        counterSelectContainer.classList.add("d-none");
+        countersList.innerHTML = '<div class="text-muted">Aucun compteur disponible</div>';
+        document.getElementById("counterRequired").style.display = "none";
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des compteurs:", error);
+      counterSelectContainer.classList.add("d-none");
+      document.getElementById("counterRequired").style.display = "none";
+    }
+  }
+  
+  // Fonction pour mettre à jour l'unité de périodicité et valider les unités
+  function updateUnitValidation() {
+    const checked = document.querySelectorAll('.counter-checkbox:checked');
+    const periodicityUnit = document.getElementById("periodicityUnit");
+    const unitWarning = document.getElementById("unitWarning");
+    
+    if (checked.length === 0) {
+      periodicityUnit.textContent = "h";
+      unitWarning.style.display = "none";
+      return;
+    }
+    
+    // Vérifier que tous les compteurs sélectionnés ont la même unité
+    const units = Array.from(checked).map(cb => cb.dataset.unit || 'h');
+    const uniqueUnits = [...new Set(units)];
+    
+    if (uniqueUnits.length > 1) {
+      // Unités différentes : afficher un avertissement et désélectionner les autres
+      unitWarning.style.display = "block";
+      // Désélectionner tous sauf le premier
+      for (let i = 1; i < checked.length; i++) {
+        checked[i].checked = false;
+      }
+      // Re-vérifier avec seulement le premier
+      const firstChecked = document.querySelector('.counter-checkbox:checked');
+      if (firstChecked) {
+        periodicityUnit.textContent = firstChecked.dataset.unit || 'h';
+      }
+    } else {
+      // Toutes les unités sont identiques
+      unitWarning.style.display = "none";
+      periodicityUnit.textContent = uniqueUnits[0] || 'h';
+    }
+  }
+  
+  // Ajouter les event listeners pour les checkboxes de compteurs
+  document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('counter-checkbox')) {
+      updateUnitValidation();
+    }
+  });
+  
+  // Validation : au moins un compteur doit être sélectionné si requis et unités identiques
+  document.getElementById("maintenanceForm").addEventListener("submit", function(e) {
+    const triggerType = document.getElementById("triggerTypeSelect").value;
+    
+    if (triggerType === "counter") {
+      const counterRequired = document.getElementById("counterRequired").style.display !== "none";
+      if (counterRequired) {
+        const checked = document.querySelectorAll('.counter-checkbox:checked');
+        if (checked.length === 0) {
+          e.preventDefault();
+          alert("Veuillez sélectionner au moins un compteur.");
+          return false;
+        }
+        
+        // Vérifier que tous les compteurs ont la même unité
+        const units = Array.from(checked).map(cb => cb.dataset.unit || 'h');
+        const uniqueUnits = [...new Set(units)];
+        if (uniqueUnits.length > 1) {
+          e.preventDefault();
+          alert("Tous les compteurs sélectionnés doivent avoir la même unité.");
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+  
+  machineSelect.addEventListener("change", updateCounterSelect);
+  
+  // Initialiser au chargement si une machine est déjà sélectionnée
+  if (machineSelect.value) {
+    updateCounterSelect();
+  }
+  
+  // Gestion du type de déclenchement (compteur vs calendaire)
+  const triggerTypeSelect = document.getElementById("triggerTypeSelect");
+  const calendarFields = document.getElementById("calendarFields");
+  const calendarStartDate = document.getElementById("calendarStartDate");
+  const periodicityUnit = document.getElementById("periodicityUnit");
+  const periodicityHelp = document.getElementById("periodicityHelp");
+  
+  function updateTriggerTypeFields() {
+    const triggerType = triggerTypeSelect.value;
+    
+    if (triggerType === "calendar") {
+      calendarFields.style.display = "block";
+      calendarStartDate.required = true;
+      counterSelectContainer.classList.add("d-none");
+      periodicityUnit.textContent = "jours";
+      periodicityHelp.textContent = "La maintenance sera due tous les X jours à partir de la date de début.";
+    } else {
+      calendarFields.style.display = "none";
+      calendarStartDate.required = false;
+      periodicityUnit.textContent = "heures";
+      periodicityHelp.textContent = "La maintenance sera due tous les X heures de compteur.";
+      
+      // Afficher les compteurs si une machine est sélectionnée
+      if (machineSelect.value) {
+        updateCounterSelect();
+      }
+    }
+  }
+  
+  triggerTypeSelect.addEventListener("change", updateTriggerTypeFields);
+  
+  // Initialiser au chargement
+  updateTriggerTypeFields();
+  
+  // Fonction pour charger les composants d'un modèle existant
+  async function loadTemplateComponents(reportId) {
+    if (!reportId) return;
+    
+    try {
+      const response = await fetch(`/api/maintenance-report/${reportId}/components`);
+      const data = await response.json();
+      
+      if (data.success && data.components && data.components.length > 0) {
+        // Vider les lignes existantes sauf la première
+        const componentRows = document.getElementById("componentRows");
+        const existingRows = componentRows.querySelectorAll(".component-row");
+        existingRows.forEach((row, index) => {
+          if (index > 0) {
+            row.remove();
+          } else {
+            // Vider la première ligne
+            row.querySelectorAll("input, select").forEach((el) => (el.value = ""));
+          }
+        });
+        
+        // Ajouter les composants du modèle
+        data.components.forEach((component, index) => {
+          let row;
+          if (index === 0) {
+            // Utiliser la première ligne existante
+            row = componentRows.querySelector(".component-row");
+          } else {
+            // Cloner la première ligne pour les autres
+            const template = componentRows.querySelector(".component-row");
+            row = template.cloneNode(true);
+            componentRows.appendChild(row);
+          }
+          
+          // Remplir les champs
+          const labelInput = row.querySelector('input[name="component_label"]');
+          const commentInput = row.querySelector('input[name="component_comment"]');
+          const typeSelect = row.querySelector('select[name="component_type"]');
+          
+          if (labelInput) labelInput.value = component.label || "";
+          if (commentInput) commentInput.value = component.comment || "";
+          if (typeSelect) typeSelect.value = component.field_type || "";
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement du modèle:", error);
+      alert("Erreur lors du chargement du modèle");
+    }
+  }
+  
+  // Exposer la fonction globalement
+  window.loadTemplateComponents = loadTemplateComponents;
+</script>
+{% endblock %}
+

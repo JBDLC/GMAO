@@ -164,8 +164,34 @@
     <input class="form-control" name="name" value="{% if report %}{{ report.name }}{% endif %}" required />
   </div>
   <div class="mb-3">
+    <label class="form-label">Type de déclenchement</label>
+    <select class="form-select" name="trigger_type" id="triggerTypeSelect" required>
+      <option value="counter" {% if report and report.trigger_type == 'counter' %}selected{% endif %}>Compteur</option>
+      <option value="calendar" {% if report and report.trigger_type == 'calendar' %}selected{% endif %}>Calendaire</option>
+    </select>
+    <small class="form-text text-muted">Choisissez si la maintenance est déclenchée par un compteur ou par un calendrier (tous les X jours).</small>
+  </div>
+  <div class="mb-3" id="calendarFields" style="display: {% if report and report.trigger_type == 'calendar' %}block{% else %}none{% endif %};">
+    <label class="form-label">Date de début du calendrier</label>
+    <input class="form-control" type="date" name="calendar_start_date" id="calendarStartDate" value="{% if report and report.calendar_start_date %}{{ report.calendar_start_date.strftime('%Y-%m-%d') }}{% endif %}" />
+    <small class="form-text text-muted">La première maintenance sera due à cette date + la périodicité.</small>
+  </div>
+  <div class="mb-3">
     <label class="form-label">Périodicité</label>
-    <input class="form-control" type="number" min="1" name="periodicity" value="{% if report %}{{ report.periodicity }}{% endif %}" required />
+    <div class="input-group">
+      <input class="form-control" type="number" min="1" name="periodicity" value="{% if report %}{{ report.periodicity }}{% endif %}" required />
+      <span class="input-group-text" id="periodicityUnit">{% if report and report.trigger_type == 'calendar' %}jours{% else %}h{% endif %}</span>
+    </div>
+    <small class="form-text text-muted" id="periodicityHelp">
+      {% if report and report.trigger_type == 'calendar' %}
+      La maintenance sera due tous les X jours à partir de la date de début.
+      {% else %}
+      La maintenance sera due tous les X heures de compteur.
+      {% endif %}
+    </small>
+    <div id="unitWarning" class="alert alert-warning mt-2" style="display: none;">
+      <small><strong>Attention :</strong> Tous les compteurs sélectionnés doivent avoir la même unité.</small>
+    </div>
   </div>
   <hr />
   <h4>Éléments du rapport</h4>
@@ -309,6 +335,7 @@
           checkbox.name = "counter_ids[]";
           checkbox.value = counter.id === null ? "machine" : counter.id;
           checkbox.id = `counter_${counter.id === null ? "machine" : counter.id}`;
+          checkbox.dataset.unit = counter.unit || 'h'; // Stocker l'unité dans le dataset
           
           // Pré-cocher si on est en mode édition et que ce compteur est sélectionné
           {% if report and selected_counter_ids %}
@@ -330,6 +357,9 @@
           countersList.appendChild(div);
         });
         
+        // Ajouter les event listeners pour valider les unités
+        updateUnitValidation();
+        
         // Si la machine n'a pas de compteur, au moins un compteur est obligatoire
         if (!hasMachineCounter) {
           document.getElementById("counterRequired").style.display = "inline";
@@ -348,15 +378,70 @@
     }
   }
   
-  // Validation : au moins un compteur doit être sélectionné si requis
+  // Fonction pour mettre à jour l'unité de périodicité et valider les unités
+  function updateUnitValidation() {
+    const checked = document.querySelectorAll('.counter-checkbox:checked');
+    const periodicityUnit = document.getElementById("periodicityUnit");
+    const unitWarning = document.getElementById("unitWarning");
+    
+    if (checked.length === 0) {
+      periodicityUnit.textContent = "h";
+      unitWarning.style.display = "none";
+      return;
+    }
+    
+    // Vérifier que tous les compteurs sélectionnés ont la même unité
+    const units = Array.from(checked).map(cb => cb.dataset.unit || 'h');
+    const uniqueUnits = [...new Set(units)];
+    
+    if (uniqueUnits.length > 1) {
+      // Unités différentes : afficher un avertissement et désélectionner les autres
+      unitWarning.style.display = "block";
+      // Désélectionner tous sauf le premier
+      for (let i = 1; i < checked.length; i++) {
+        checked[i].checked = false;
+      }
+      // Re-vérifier avec seulement le premier
+      const firstChecked = document.querySelector('.counter-checkbox:checked');
+      if (firstChecked) {
+        periodicityUnit.textContent = firstChecked.dataset.unit || 'h';
+      }
+    } else {
+      // Toutes les unités sont identiques
+      unitWarning.style.display = "none";
+      periodicityUnit.textContent = uniqueUnits[0] || 'h';
+    }
+  }
+  
+  // Ajouter les event listeners pour les checkboxes de compteurs
+  document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('counter-checkbox')) {
+      updateUnitValidation();
+    }
+  });
+  
+  // Validation : au moins un compteur doit être sélectionné si requis et unités identiques
   document.getElementById("maintenanceForm").addEventListener("submit", function(e) {
-    const counterRequired = document.getElementById("counterRequired").style.display !== "none";
-    if (counterRequired) {
-      const checked = document.querySelectorAll('.counter-checkbox:checked');
-      if (checked.length === 0) {
-        e.preventDefault();
-        alert("Veuillez sélectionner au moins un compteur.");
-        return false;
+    const triggerType = document.getElementById("triggerTypeSelect").value;
+    
+    if (triggerType === "counter") {
+      const counterRequired = document.getElementById("counterRequired").style.display !== "none";
+      if (counterRequired) {
+        const checked = document.querySelectorAll('.counter-checkbox:checked');
+        if (checked.length === 0) {
+          e.preventDefault();
+          alert("Veuillez sélectionner au moins un compteur.");
+          return false;
+        }
+        
+        // Vérifier que tous les compteurs ont la même unité
+        const units = Array.from(checked).map(cb => cb.dataset.unit || 'h');
+        const uniqueUnits = [...new Set(units)];
+        if (uniqueUnits.length > 1) {
+          e.preventDefault();
+          alert("Tous les compteurs sélectionnés doivent avoir la même unité.");
+          return false;
+        }
       }
     }
     return true;
@@ -368,6 +453,40 @@
   if (machineSelect.value) {
     updateCounterSelect();
   }
+  
+  // Gestion du type de déclenchement (compteur vs calendaire)
+  const triggerTypeSelect = document.getElementById("triggerTypeSelect");
+  const calendarFields = document.getElementById("calendarFields");
+  const calendarStartDate = document.getElementById("calendarStartDate");
+  const periodicityUnit = document.getElementById("periodicityUnit");
+  const periodicityHelp = document.getElementById("periodicityHelp");
+  
+  function updateTriggerTypeFields() {
+    const triggerType = triggerTypeSelect.value;
+    
+    if (triggerType === "calendar") {
+      calendarFields.style.display = "block";
+      calendarStartDate.required = true;
+      counterSelectContainer.classList.add("d-none");
+      periodicityUnit.textContent = "jours";
+      periodicityHelp.textContent = "La maintenance sera due tous les X jours à partir de la date de début.";
+    } else {
+      calendarFields.style.display = "none";
+      calendarStartDate.required = false;
+      periodicityUnit.textContent = "heures";
+      periodicityHelp.textContent = "La maintenance sera due tous les X heures de compteur.";
+      
+      // Afficher les compteurs si une machine est sélectionnée
+      if (machineSelect.value) {
+        updateCounterSelect();
+      }
+    }
+  }
+  
+  triggerTypeSelect.addEventListener("change", updateTriggerTypeFields);
+  
+  // Initialiser au chargement
+  updateTriggerTypeFields();
   
   // Fonction pour charger les composants d'un modèle existant
   async function loadTemplateComponents(reportId) {

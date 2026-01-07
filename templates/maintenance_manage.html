@@ -162,7 +162,13 @@
       </thead>
       <tbody>
         {% for item in overdue %}
-        {% set unit = item.machine.counter_unit or 'h' %}
+        {% if item.trigger_type == 'calendar' %}
+          {% set unit = 'jours' %}
+          {% set last_performed_date = item.last_performed %}
+        {% else %}
+          {% set unit = item.machine.counter_unit or 'h' %}
+          {% set last_performed_date = item.last_performed %}
+        {% endif %}
           <tr style="cursor: pointer;" onclick="window.location.href='{{ url_for('fill_maintenance', machine_id=item.machine.id, report_id=item.report.id) }}'">
             <td class="ps-3">
               <a href="{{ url_for('machine_detail', machine_id=item.machine.id) }}" class="text-decoration-none fw-semibold" onclick="event.stopPropagation();">
@@ -175,25 +181,47 @@
               <a href="{{ url_for('fill_maintenance', machine_id=item.machine.id, report_id=item.report.id) }}" class="text-decoration-none fw-semibold text-dark" onclick="event.stopPropagation();">
                 {{ item.report.name }}
               </a>
+              {% if item.trigger_type == 'calendar' %}
+                <br><small class="text-muted fst-italic">(Calendaire)</small>
+              {% endif %}
             </td>
           <td>
-            {% if item.last_performed %}
-              <span class="text-muted">{{ item.last_performed.strftime("%d/%m/%Y") }}</span>
-              <br>
-              <small class="text-muted">{{ item.last_performed.strftime("%H:%M") }}</small>
+            {% if last_performed_date %}
+              <span class="text-muted">{{ last_performed_date.strftime("%d/%m/%Y") if last_performed_date is not string else last_performed_date }}</span>
+              {% if item.trigger_type != 'calendar' %}
+                <br>
+                <small class="text-muted">{{ last_performed_date.strftime("%H:%M") }}</small>
+              {% endif %}
             {% else %}
               <span class="text-muted fst-italic">{{ t('Jamais effectué') }}</span>
             {% endif %}
           </td>
             <td>
-              <span class="fw-semibold">{{ "%.1f"|format(item.report.periodicity - item.remaining) }}</span>
+              {% if item.trigger_type == 'calendar' %}
+                {% if last_performed_date %}
+                  <span class="fw-semibold">{{ (item.report.periodicity - (-item.remaining))|int }}</span>
+                {% else %}
+                  <span class="fw-semibold">0</span>
+                {% endif %}
+              {% else %}
+                <span class="fw-semibold">{{ "%.1f"|format(item.report.periodicity - item.remaining) }}</span>
+              {% endif %}
               <small class="text-muted"> {{ unit }}</small>
             </td>
             <td>
               <span class="badge bg-secondary">{{ item.report.periodicity }} {{ unit }}</span>
             </td>
             <td class="text-end pe-3">
-              <span class="badge bg-danger">{{ "%.1f"|format(-item.remaining) }} {{ unit }}</span>
+              <span class="badge bg-danger">
+                {% if item.trigger_type == 'calendar' %}
+                  {{ (-item.remaining)|int }} {{ unit }}
+                  {% if item.missed_count and item.missed_count > 0 %}
+                    <br><small>({{ item.missed_count }} {{ t('fois') }})</small>
+                  {% endif %}
+                {% else %}
+                  {{ "%.1f"|format(-item.remaining) }} {{ unit }}
+                {% endif %}
+              </span>
             </td>
         </tr>
         {% endfor %}

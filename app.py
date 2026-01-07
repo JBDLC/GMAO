@@ -442,6 +442,8 @@ class PreventiveReport(db.Model):
     machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
     counter_id = db.Column(db.Integer, db.ForeignKey("counter.id"), nullable=True, index=True)  # DEPRECATED: Utiliser report_counters pour plusieurs compteurs
     periodicity = db.Column(db.Integer, nullable=False)
+    trigger_type = db.Column(db.String(20), nullable=False, default='counter')  # 'counter' ou 'calendar'
+    calendar_start_date = db.Column(db.Date, nullable=True)  # Date de début pour les maintenances calendaires
 
     machine = db.relationship("Machine", backref="preventive_reports")
     counter = db.relationship("Counter", backref="preventive_reports")  # DEPRECATED: Utiliser report_counters
@@ -533,6 +535,22 @@ class MaintenanceProgress(db.Model):
     __table_args__ = (
         db.UniqueConstraint("machine_id", "report_id", name="uq_progress_machine_report"),
         db.UniqueConstraint("counter_id", "report_id", name="uq_progress_counter_report"),
+    )
+
+
+class CalendarMaintenanceProgress(db.Model):
+    """Suivi des maintenances calendaires (basées sur les dates)"""
+    id = db.Column(db.Integer, primary_key=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id"), nullable=False, index=True)
+    report_id = db.Column(db.Integer, db.ForeignKey("preventive_report.id"), nullable=False, index=True)
+    last_performed_date = db.Column(db.Date, nullable=True)  # Date de la dernière maintenance effectuée
+    missed_count = db.Column(db.Integer, nullable=False, default=0)  # Nombre d'échéances manquées consécutives
+
+    machine = db.relationship("Machine", backref="calendar_maintenance_progress")
+    report = db.relationship("PreventiveReport", backref="calendar_progress")
+
+    __table_args__ = (
+        db.UniqueConstraint("machine_id", "report_id", name="uq_calendar_progress_machine_report"),
     )
 
 
@@ -1015,6 +1033,49 @@ with app.app_context():
                     conn.execute(text("ALTER TABLE preventive_component ADD COLUMN comment VARCHAR(500)"))
                     conn.commit()
     except Exception:
+        pass
+    # Migration pour ajouter trigger_type et calendar_start_date à preventive_report
+    try:
+        inspector = inspect(db.engine)
+        preventive_report_columns = {col["name"] for col in inspector.get_columns("preventive_report")}
+        if "trigger_type" not in preventive_report_columns:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE preventive_report ADD COLUMN trigger_type VARCHAR(20) DEFAULT 'counter'"))
+                conn.execute(text("UPDATE preventive_report SET trigger_type = 'counter' WHERE trigger_type IS NULL"))
+                conn.commit()
+        if "calendar_start_date" not in preventive_report_columns:
+            with db.engine.connect() as conn:
+                if database_url and "postgresql" in database_url:
+                    conn.execute(text("ALTER TABLE preventive_report ADD COLUMN calendar_start_date DATE"))
+                else:
+                    conn.execute(text("ALTER TABLE preventive_report ADD COLUMN calendar_start_date DATE"))
+                conn.commit()
+    except Exception as exc:
+        print(f"Error migrating preventive_report table for calendar fields: {exc}")
+        pass
+    # Migration pour créer la table calendar_maintenance_progress
+    try:
+        inspector = inspect(db.engine)
+        tables = {table["name"] for table in inspector.get_table_names()}
+        if "calendar_maintenance_progress" not in tables:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE calendar_maintenance_progress (
+                        id INTEGER PRIMARY KEY,
+                        machine_id INTEGER NOT NULL,
+                        report_id INTEGER NOT NULL,
+                        last_performed_date DATE,
+                        missed_count INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (machine_id) REFERENCES machine(id) ON DELETE CASCADE,
+                        FOREIGN KEY (report_id) REFERENCES preventive_report(id) ON DELETE CASCADE,
+                        UNIQUE (machine_id, report_id)
+                    )
+                """))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_calendar_maintenance_progress_machine_id ON calendar_maintenance_progress(machine_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_calendar_maintenance_progress_report_id ON calendar_maintenance_progress(report_id)"))
+                conn.commit()
+    except Exception as exc:
+        print(f"Error creating calendar_maintenance_progress table: {exc}")
         pass
     # Migration pour ajouter counter_id à maintenance_progress
     try:
@@ -1842,7 +1903,19 @@ def machine_detail(machine_id):
         for report in templates:
             # Utiliser la fonction get_report_min_hours_since pour gérer plusieurs compteurs
             hours_remaining = get_report_min_hours_since(machine, report)
-            template_progress.append({"report": report, "hours_since": hours_remaining})
+            
+            # Déterminer l'unité selon le type de déclenchement
+            if report.trigger_type == "calendar":
+                unit = "jours"
+            else:
+                # Pour les maintenances basées sur compteur, obtenir l'unité du compteur
+                unit = get_report_unit(machine, report)
+            
+            template_progress.append({
+                "report": report, 
+                "hours_since": hours_remaining,
+                "unit": unit
+            })
             
             # Regrouper les entries par report_id
             report_entries = [e for e in entries if e.report_id == report.id]
@@ -4443,6 +4516,8 @@ def new_maintenance():
         name = request.form["name"].strip()
         periodicity_raw = request.form.get("periodicity")
         machine_id_raw = request.form.get("machine_id")
+        trigger_type = request.form.get("trigger_type", "counter")  # 'counter' ou 'calendar'
+        calendar_start_date_raw = request.form.get("calendar_start_date")
         component_labels = request.form.getlist("component_label")
         component_comments = request.form.getlist("component_comment")
         component_types = request.form.getlist("component_type")
@@ -4460,6 +4535,18 @@ def new_maintenance():
         if not name or periodicity <= 0:
             flash("Nom et périodicité valide requis", "danger")
             return redirect(request.url)
+        
+        # Validation pour les maintenances calendaires
+        calendar_start_date = None
+        if trigger_type == "calendar":
+            if not calendar_start_date_raw:
+                flash("La date de début est requise pour les maintenances calendaires", "danger")
+                return redirect(request.url)
+            try:
+                calendar_start_date = dt.datetime.strptime(calendar_start_date_raw, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                flash("Date de début invalide", "danger")
+                return redirect(request.url)
 
         if not machine_id:
             flash("Veuillez sélectionner une machine", "danger")
@@ -4475,63 +4562,80 @@ def new_maintenance():
         while root_machine.parent:
             root_machine = root_machine.parent
         
-        # Vérifier que la machine a un compteur OU que la machine racine a des compteurs
-        has_own_counter = machine.hour_counter_enabled
-        has_root_counters = root_machine.is_root() and root_machine.counters
-        
-        if not has_own_counter and not has_root_counters:
-            flash("La machine doit avoir un compteur ou la machine racine doit avoir des compteurs pour créer un modèle de maintenance", "danger")
-            return redirect(request.url)
-
-        # Gérer les compteurs sélectionnés (nouveau système : plusieurs compteurs possibles)
-        counter_ids_selected = []
-        counter_ids_raw = request.form.getlist("counter_ids[]")  # Liste de compteurs sélectionnés
-        
-        # Si aucun compteur sélectionné, vérifier l'ancien système (compatibilité)
-        if not counter_ids_raw:
-            counter_id_raw = request.form.get("counter_id")
-            if counter_id_raw and counter_id_raw != "" and counter_id_raw != "machine":
-                counter_ids_raw = [counter_id_raw]
-        
-        # Si la machine n'a pas de compteur, au moins un compteur de la machine racine est obligatoire
-        if not has_own_counter:
-            if not counter_ids_raw or all(cid == "" or cid == "machine" for cid in counter_ids_raw):
-                flash("Vous devez sélectionner au moins un compteur de la machine racine car cette machine n'a pas de compteur", "danger")
-                return redirect(request.url)
-        
-        # Traiter chaque compteur sélectionné
-        for counter_id_raw in counter_ids_raw:
-            if not counter_id_raw or counter_id_raw == "" or counter_id_raw == "machine":
-                # Compteur machine classique (None)
-                if has_own_counter:
-                    counter_ids_selected.append(None)  # None = compteur machine
-                continue
+        # Pour les maintenances basées sur compteur, vérifier que la machine a un compteur OU que la machine racine a des compteurs
+        if trigger_type == "counter":
+            has_own_counter = machine.hour_counter_enabled
+            has_root_counters = root_machine.is_root() and root_machine.counters
             
-            try:
-                counter_id = int(counter_id_raw)
-                # Vérifier que le compteur existe et appartient à la machine racine
-                counter = Counter.query.get(counter_id)
-                if counter:
-                    if counter.machine_id != root_machine.id:
-                        flash(f"Compteur invalide: {counter.name}", "danger")
-                        return redirect(request.url)
-                    if counter_id not in counter_ids_selected:
-                        counter_ids_selected.append(counter_id)
-                else:
-                    flash("Compteur introuvable", "danger")
-                    return redirect(request.url)
-            except (TypeError, ValueError):
-                flash("Valeur de compteur invalide", "danger")
+            if not has_own_counter and not has_root_counters:
+                flash("La machine doit avoir un compteur ou la machine racine doit avoir des compteurs pour créer un modèle de maintenance basé sur compteur", "danger")
                 return redirect(request.url)
-        
-        # Si aucun compteur sélectionné et que la machine a un compteur, utiliser le compteur machine
-        if not counter_ids_selected and has_own_counter:
-            counter_ids_selected = [None]  # None = compteur machine
-        
-        # Si toujours aucun compteur, erreur
-        if not counter_ids_selected:
-            flash("Vous devez sélectionner au moins un compteur", "danger")
-            return redirect(request.url)
+
+        # Gérer les compteurs sélectionnés (uniquement pour les maintenances basées sur compteur)
+        counter_ids_selected = []
+        if trigger_type == "counter":
+            counter_ids_raw = request.form.getlist("counter_ids[]")  # Liste de compteurs sélectionnés
+            
+            # Si aucun compteur sélectionné, vérifier l'ancien système (compatibilité)
+            if not counter_ids_raw:
+                counter_id_raw = request.form.get("counter_id")
+                if counter_id_raw and counter_id_raw != "" and counter_id_raw != "machine":
+                    counter_ids_raw = [counter_id_raw]
+            
+            has_own_counter = machine.hour_counter_enabled
+            
+            # Si la machine n'a pas de compteur, au moins un compteur de la machine racine est obligatoire
+            if not has_own_counter:
+                if not counter_ids_raw or all(cid == "" or cid == "machine" for cid in counter_ids_raw):
+                    flash("Vous devez sélectionner au moins un compteur de la machine racine car cette machine n'a pas de compteur", "danger")
+                    return redirect(request.url)
+            
+            # Traiter chaque compteur sélectionné et vérifier les unités
+            counters_with_units = []
+            for counter_id_raw in counter_ids_raw:
+                if not counter_id_raw or counter_id_raw == "" or counter_id_raw == "machine":
+                    # Compteur machine classique (None)
+                    if has_own_counter:
+                        machine_unit = machine.counter_unit or 'h'
+                        counters_with_units.append((None, machine_unit))
+                    continue
+                
+                try:
+                    counter_id = int(counter_id_raw)
+                    # Vérifier que le compteur existe et appartient à la machine racine
+                    counter = Counter.query.get(counter_id)
+                    if counter:
+                        if counter.machine_id != root_machine.id:
+                            flash(f"Compteur invalide: {counter.name}", "danger")
+                            return redirect(request.url)
+                        counter_unit = counter.unit or 'h'
+                        counters_with_units.append((counter_id, counter_unit))
+                    else:
+                        flash("Compteur introuvable", "danger")
+                        return redirect(request.url)
+                except (TypeError, ValueError):
+                    flash("Valeur de compteur invalide", "danger")
+                    return redirect(request.url)
+            
+            # Si aucun compteur sélectionné et que la machine a un compteur, utiliser le compteur machine
+            if not counters_with_units and has_own_counter:
+                machine_unit = machine.counter_unit or 'h'
+                counters_with_units.append((None, machine_unit))
+            
+            # Si toujours aucun compteur, erreur
+            if not counters_with_units:
+                flash("Vous devez sélectionner au moins un compteur", "danger")
+                return redirect(request.url)
+            
+            # Vérifier que tous les compteurs ont la même unité
+            units = [unit for _, unit in counters_with_units]
+            unique_units = set(units)
+            if len(unique_units) > 1:
+                flash(f"Tous les compteurs sélectionnés doivent avoir la même unité. Unités trouvées : {', '.join(sorted(unique_units))}", "danger")
+                return redirect(request.url)
+            
+            # Extraire les IDs de compteurs
+            counter_ids_selected = [counter_id for counter_id, _ in counters_with_units]
 
         components = []
         # S'assurer que les listes ont la même longueur
@@ -4554,23 +4658,41 @@ def new_maintenance():
             flash("Ajoutez au moins un élément de rapport", "danger")
             return redirect(request.url)
 
-        # Créer le plan (counter_id gardé pour compatibilité mais sera ignoré si report_counters existe)
-        counter_id = counter_ids_selected[0] if len(counter_ids_selected) == 1 else None
-        report = PreventiveReport(name=name, periodicity=periodicity, machine_id=machine_id, counter_id=counter_id)
+        # Créer le plan
+        counter_id = counter_ids_selected[0] if counter_ids_selected and len(counter_ids_selected) == 1 else None
+        report = PreventiveReport(
+            name=name, 
+            periodicity=periodicity, 
+            machine_id=machine_id, 
+            counter_id=counter_id,
+            trigger_type=trigger_type,
+            calendar_start_date=calendar_start_date
+        )
         report.components.extend(components)
         db.session.add(report)
         db.session.flush()  # Pour obtenir l'ID du report
         
-        # Créer les liaisons avec les compteurs
-        for counter_id_val in counter_ids_selected:
-            report_counter = PreventiveReportCounter(report_id=report.id, counter_id=counter_id_val)
-            db.session.add(report_counter)
+        # Créer les liaisons avec les compteurs (uniquement pour les maintenances basées sur compteur)
+        if trigger_type == "counter":
+            for counter_id_val in counter_ids_selected:
+                report_counter = PreventiveReportCounter(report_id=report.id, counter_id=counter_id_val)
+                db.session.add(report_counter)
+        else:
+            # Pour les maintenances calendaires, créer le CalendarMaintenanceProgress
+            calendar_progress = CalendarMaintenanceProgress(
+                machine_id=machine_id,
+                report_id=report.id,
+                last_performed_date=None,
+                missed_count=0
+            )
+            db.session.add(calendar_progress)
         
         try:
             db.session.commit()
-            # Créer le MaintenanceProgress pour initialiser "avant maintenance"
-            ensure_all_progress_for_machine(machine)
-            db.session.commit()
+            # Créer le MaintenanceProgress pour initialiser "avant maintenance" (uniquement pour compteur)
+            if trigger_type == "counter":
+                ensure_all_progress_for_machine(machine)
+                db.session.commit()
             flash("Modèle enregistré", "success")
             if machine_id:
                 return redirect(get_machine_detail_url(machine_id, 'preventive'))
@@ -4635,6 +4757,8 @@ def edit_maintenance(report_id):
     if request.method == "POST":
         name = request.form["name"].strip()
         periodicity_raw = request.form.get("periodicity")
+        trigger_type = request.form.get("trigger_type", "counter")
+        calendar_start_date_raw = request.form.get("calendar_start_date")
         component_labels = request.form.getlist("component_label")
         component_comments = request.form.getlist("component_comment")
         component_types = request.form.getlist("component_type")
@@ -4647,67 +4771,122 @@ def edit_maintenance(report_id):
         if not name or periodicity <= 0:
             flash("Nom et périodicité valide requis", "danger")
             return redirect(request.url)
+        
+        # Validation pour les maintenances calendaires
+        calendar_start_date = None
+        if trigger_type == "calendar":
+            if not calendar_start_date_raw:
+                flash("La date de début est requise pour les maintenances calendaires", "danger")
+                return redirect(request.url)
+            try:
+                calendar_start_date = dt.datetime.strptime(calendar_start_date_raw, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                flash("Date de début invalide", "danger")
+                return redirect(request.url)
 
         # Trouver la machine racine
         root_machine = machine
         while root_machine.parent:
             root_machine = root_machine.parent
         
-        # Gérer les compteurs sélectionnés
+        # Gérer les compteurs sélectionnés (uniquement pour les maintenances basées sur compteur)
         counter_ids_selected = []
-        counter_ids_raw = request.form.getlist("counter_ids[]")
-        
-        if not counter_ids_raw:
-            counter_id_raw = request.form.get("counter_id")
-            if counter_id_raw and counter_id_raw != "" and counter_id_raw != "machine":
-                counter_ids_raw = [counter_id_raw]
-        
-        has_own_counter = machine.hour_counter_enabled
-        
-        # Traiter chaque compteur sélectionné
-        for counter_id_raw in counter_ids_raw:
-            if not counter_id_raw or counter_id_raw == "" or counter_id_raw == "machine":
-                if has_own_counter:
-                    counter_ids_selected.append(None)
-                continue
+        if trigger_type == "counter":
+            counter_ids_raw = request.form.getlist("counter_ids[]")
             
-            try:
-                counter_id = int(counter_id_raw)
-                counter = Counter.query.get(counter_id)
-                if counter:
-                    if counter.machine_id != root_machine.id:
-                        flash(f"Compteur invalide: {counter.name}", "danger")
+            if not counter_ids_raw:
+                counter_id_raw = request.form.get("counter_id")
+                if counter_id_raw and counter_id_raw != "" and counter_id_raw != "machine":
+                    counter_ids_raw = [counter_id_raw]
+            
+            has_own_counter = machine.hour_counter_enabled
+            
+            # Traiter chaque compteur sélectionné et vérifier les unités
+            counters_with_units = []
+            for counter_id_raw in counter_ids_raw:
+                if not counter_id_raw or counter_id_raw == "" or counter_id_raw == "machine":
+                    # Compteur machine classique (None)
+                    if has_own_counter:
+                        machine_unit = machine.counter_unit or 'h'
+                        counters_with_units.append((None, machine_unit))
+                    continue
+                
+                try:
+                    counter_id = int(counter_id_raw)
+                    counter = Counter.query.get(counter_id)
+                    if counter:
+                        if counter.machine_id != root_machine.id:
+                            flash(f"Compteur invalide: {counter.name}", "danger")
+                            return redirect(request.url)
+                        counter_unit = counter.unit or 'h'
+                        counters_with_units.append((counter_id, counter_unit))
+                    else:
+                        flash("Compteur introuvable", "danger")
                         return redirect(request.url)
-                    if counter_id not in counter_ids_selected:
-                        counter_ids_selected.append(counter_id)
-                else:
-                    flash("Compteur introuvable", "danger")
+                except (TypeError, ValueError):
+                    flash("Valeur de compteur invalide", "danger")
                     return redirect(request.url)
-            except (TypeError, ValueError):
-                flash("Valeur de compteur invalide", "danger")
+            
+            if not counters_with_units and has_own_counter:
+                machine_unit = machine.counter_unit or 'h'
+                counters_with_units.append((None, machine_unit))
+            
+            if not counters_with_units:
+                flash("Vous devez sélectionner au moins un compteur", "danger")
                 return redirect(request.url)
-        
-        if not counter_ids_selected and has_own_counter:
-            counter_ids_selected = [None]
-        
-        if not counter_ids_selected:
-            flash("Vous devez sélectionner au moins un compteur", "danger")
-            return redirect(request.url)
+            
+            # Vérifier que tous les compteurs ont la même unité
+            units = [unit for _, unit in counters_with_units]
+            unique_units = set(units)
+            if len(unique_units) > 1:
+                flash(f"Tous les compteurs sélectionnés doivent avoir la même unité. Unités trouvées : {', '.join(sorted(unique_units))}", "danger")
+                return redirect(request.url)
+            
+            # Extraire les IDs de compteurs
+            counter_ids_selected = [counter_id for counter_id, _ in counters_with_units]
 
         # Sauvegarder l'ancienne périodicité pour recalculer les progress
         old_periodicity = report.periodicity
+        old_trigger_type = report.trigger_type
         
         # Mettre à jour le plan
         report.name = name
         report.periodicity = periodicity
+        report.trigger_type = trigger_type
+        report.calendar_start_date = calendar_start_date
         
-        # Supprimer les anciens compteurs associés
-        PreventiveReportCounter.query.filter_by(report_id=report.id).delete()
-        
-        # Ajouter les nouveaux compteurs
-        for counter_id_val in counter_ids_selected:
-            report_counter = PreventiveReportCounter(report_id=report.id, counter_id=counter_id_val)
-            db.session.add(report_counter)
+        # Gérer les compteurs et le calendar progress selon le type
+        if trigger_type == "counter":
+            # Supprimer les anciens compteurs associés
+            PreventiveReportCounter.query.filter_by(report_id=report.id).delete()
+            
+            # Ajouter les nouveaux compteurs
+            for counter_id_val in counter_ids_selected:
+                report_counter = PreventiveReportCounter(report_id=report.id, counter_id=counter_id_val)
+                db.session.add(report_counter)
+            
+            # Supprimer le calendar progress si on passe de calendar à counter
+            if old_trigger_type == "calendar":
+                CalendarMaintenanceProgress.query.filter_by(report_id=report.id, machine_id=machine.id).delete()
+        else:
+            # Supprimer les compteurs si on passe de counter à calendar
+            if old_trigger_type == "counter":
+                PreventiveReportCounter.query.filter_by(report_id=report.id).delete()
+            
+            # Créer ou mettre à jour le calendar progress
+            calendar_progress = CalendarMaintenanceProgress.query.filter_by(
+                machine_id=machine.id,
+                report_id=report.id
+            ).first()
+            
+            if not calendar_progress:
+                calendar_progress = CalendarMaintenanceProgress(
+                    machine_id=machine.id,
+                    report_id=report.id,
+                    last_performed_date=None,
+                    missed_count=0
+                )
+                db.session.add(calendar_progress)
         
         # Supprimer les anciens composants
         PreventiveComponent.query.filter_by(report_id=report.id).delete()
@@ -4736,8 +4915,8 @@ def edit_maintenance(report_id):
         
         db.session.add_all(components)
         
-        # Recalculer les MaintenanceProgress existants si la périodicité a changé
-        if old_periodicity != periodicity and old_periodicity > 0:
+        # Recalculer les MaintenanceProgress existants si la périodicité a changé (uniquement pour counter)
+        if trigger_type == "counter" and old_periodicity != periodicity and old_periodicity > 0:
             # Récupérer tous les MaintenanceProgress pour ce plan et cette machine
             all_progress = MaintenanceProgress.query.filter_by(
                 machine_id=machine.id,
@@ -4757,9 +4936,10 @@ def edit_maintenance(report_id):
         
         try:
             db.session.commit()
-            # Mettre à jour les MaintenanceProgress si nécessaire (créer les manquants)
-            ensure_all_progress_for_machine(machine)
-            db.session.commit()
+            # Mettre à jour les MaintenanceProgress si nécessaire (créer les manquants) - uniquement pour counter
+            if trigger_type == "counter":
+                ensure_all_progress_for_machine(machine)
+                db.session.commit()
             flash("Plan modifié avec succès", "success")
             return redirect(get_machine_detail_url(machine.id, 'preventive'))
         except Exception as exc:
@@ -5060,16 +5240,17 @@ def fill_maintenance(machine_id, report_id):
     machine = Machine.query.get_or_404(machine_id)
     report = PreventiveReport.query.filter_by(id=report_id, machine_id=machine_id).first_or_404()
     
-    # Vérifier que la machine a un compteur OU que la machine racine a des compteurs
-    has_own_counter = machine.hour_counter_enabled
-    root_machine = machine
-    while root_machine.parent:
-        root_machine = root_machine.parent
-    has_root_counters = root_machine.is_root() and root_machine.counters
-    
-    if not has_own_counter and not has_root_counters:
-        flash("Seules les machines avec compteur horaire ou dont la machine racine a des compteurs peuvent avoir des plans de maintenance préventive", "danger")
-        return redirect(get_machine_detail_url(machine_id, 'preventive'))
+    # Pour les maintenances basées sur compteur, vérifier que la machine a un compteur OU que la machine racine a des compteurs
+    if report.trigger_type == "counter":
+        has_own_counter = machine.hour_counter_enabled
+        root_machine = machine
+        while root_machine.parent:
+            root_machine = root_machine.parent
+        has_root_counters = root_machine.is_root() and root_machine.counters
+        
+        if not has_own_counter and not has_root_counters:
+            flash("Seules les machines avec compteur horaire ou dont la machine racine a des compteurs peuvent avoir des plans de maintenance préventive basés sur compteur", "danger")
+            return redirect(get_machine_detail_url(machine_id, 'preventive'))
     
     stocks = Stock.query.order_by(Stock.name).all()
     products = Product.query.order_by(Product.name).all()
@@ -5183,58 +5364,80 @@ def fill_maintenance(machine_id, report_id):
                 return redirect(request.url)
             db.session.add(movement)
 
-        # Trouver le compteur qui a déclenché la maintenance (celui avec le hours_since le plus bas)
+        # Gérer selon le type de déclenchement
         triggered_counter_id = None
         triggered_hours_before = None
         
-        if report.report_counters:
-            # Nouveau système : plusieurs compteurs
-            min_hours = None
-            min_counter_id = None
-            for report_counter in report.report_counters:
-                progress = MaintenanceProgress.query.filter_by(
+        if report.trigger_type == "calendar":
+            # Maintenance calendaire : mettre à jour le CalendarMaintenanceProgress
+            calendar_progress = CalendarMaintenanceProgress.query.filter_by(
+                machine_id=machine.id,
+                report_id=report.id
+            ).first()
+            
+            if not calendar_progress:
+                # Créer le progress s'il n'existe pas
+                calendar_progress = CalendarMaintenanceProgress(
                     machine_id=machine.id,
                     report_id=report.id,
-                    counter_id=report_counter.counter_id
-                ).first()
-                
-                if progress:
-                    if min_hours is None or progress.hours_since < min_hours:
-                        min_hours = progress.hours_since
-                        min_counter_id = report_counter.counter_id
-            
-            if min_counter_id is not None:
-                triggered_counter_id = min_counter_id
-                triggered_hours_before = min_hours
-                # Réinitialiser tous les compteurs du plan
+                    last_performed_date=dt.datetime.utcnow().date(),
+                    missed_count=0
+                )
+                db.session.add(calendar_progress)
+            else:
+                # Mettre à jour avec la date actuelle et réinitialiser le compteur de retards
+                calendar_progress.last_performed_date = dt.datetime.utcnow().date()
+                calendar_progress.missed_count = 0
+        else:
+            # Maintenance basée sur compteur
+            if report.report_counters:
+                # Nouveau système : plusieurs compteurs
+                min_hours = None
+                min_counter_id = None
                 for report_counter in report.report_counters:
                     progress = MaintenanceProgress.query.filter_by(
                         machine_id=machine.id,
                         report_id=report.id,
                         counter_id=report_counter.counter_id
                     ).first()
+                    
                     if progress:
+                        if min_hours is None or progress.hours_since < min_hours:
+                            min_hours = progress.hours_since
+                            min_counter_id = report_counter.counter_id
+                
+                if min_counter_id is not None:
+                    triggered_counter_id = min_counter_id
+                    triggered_hours_before = min_hours
+                    # Réinitialiser tous les compteurs du plan
+                    for report_counter in report.report_counters:
+                        progress = MaintenanceProgress.query.filter_by(
+                            machine_id=machine.id,
+                            report_id=report.id,
+                            counter_id=report_counter.counter_id
+                        ).first()
+                        if progress:
+                            progress.hours_since = report.periodicity
+            else:
+                # Ancien système : compatibilité
+                if machine.hour_counter_enabled:
+                    progress_record = get_or_create_progress(machine, report)
+                    triggered_hours_before = progress_record.hours_since
+                    progress_record.hours_since = report.periodicity
+                elif report.counter_id:
+                    progress = MaintenanceProgress.query.filter_by(
+                        machine_id=machine.id,
+                        report_id=report.id,
+                        counter_id=report.counter_id
+                    ).first()
+                    if progress:
+                        triggered_counter_id = report.counter_id
+                        triggered_hours_before = progress.hours_since
                         progress.hours_since = report.periodicity
-        else:
-            # Ancien système : compatibilité
-            if machine.hour_counter_enabled:
-                progress_record = get_or_create_progress(machine, report)
-                triggered_hours_before = progress_record.hours_since
-                progress_record.hours_since = report.periodicity
-            elif report.counter_id:
-                progress = MaintenanceProgress.query.filter_by(
-                    machine_id=machine.id,
-                    report_id=report.id,
-                    counter_id=report.counter_id
-                ).first()
-                if progress:
-                    triggered_counter_id = report.counter_id
-                    triggered_hours_before = progress.hours_since
-                    progress.hours_since = report.periodicity
-        
-        # Stocker les informations dans l'entrée
-        entry.hours_before_maintenance = triggered_hours_before
-        entry.triggered_counter_id = triggered_counter_id
+            
+            # Stocker les informations dans l'entrée (uniquement pour compteur)
+            entry.hours_before_maintenance = triggered_hours_before
+            entry.triggered_counter_id = triggered_counter_id
 
         db.session.add(entry)
         try:
@@ -6106,8 +6309,11 @@ def maintenance_manage():
     overdue = []
     warning = []
 
+    # Maintenances basées sur compteur
     progress_records = (
-        MaintenanceProgress.query.join(MaintenanceProgress.machine).join(MaintenanceProgress.report).all()
+        MaintenanceProgress.query.join(MaintenanceProgress.machine).join(MaintenanceProgress.report)
+        .filter(PreventiveReport.trigger_type == 'counter')
+        .all()
     )
 
     last_entry_rows = (
@@ -6135,6 +6341,7 @@ def maintenance_manage():
                     "report": report,
                     "remaining": remaining,
                     "last_performed": last_performed,
+                    "trigger_type": "counter"
                 }
             )
         elif remaining <= report.periodicity * threshold_ratio:
@@ -6144,8 +6351,72 @@ def maintenance_manage():
                     "report": report,
                     "remaining": remaining,
                     "last_performed": last_performed,
+                    "trigger_type": "counter"
                 }
             )
+
+    # Maintenances calendaires dépassées uniquement
+    today = dt.datetime.utcnow().date()
+    calendar_progress_records = CalendarMaintenanceProgress.query.join(
+        CalendarMaintenanceProgress.machine
+    ).join(
+        CalendarMaintenanceProgress.report
+    ).filter(
+        PreventiveReport.trigger_type == 'calendar'
+    ).all()
+    
+    for calendar_record in calendar_progress_records:
+        machine = calendar_record.machine
+        report = calendar_record.report
+        
+        if not report.calendar_start_date:
+            continue
+        
+        # Calculer la date de prochaine échéance
+        if calendar_record.last_performed_date:
+            # Basé sur la dernière maintenance effectuée
+            next_due_date = calendar_record.last_performed_date + dt.timedelta(days=report.periodicity)
+        else:
+            # Basé sur la date de début du calendrier
+            next_due_date = report.calendar_start_date + dt.timedelta(days=report.periodicity)
+        
+        # Calculer les jours de retard
+        days_overdue = (today - next_due_date).days
+        
+        # Si la maintenance est dépassée
+        if days_overdue > 0:
+            # Mettre à jour le compteur de retards si nécessaire
+            # Calculer combien d'échéances ont été manquées
+            if calendar_record.last_performed_date:
+                base_date = calendar_record.last_performed_date
+            else:
+                base_date = report.calendar_start_date
+            
+            # Calculer le nombre d'échéances manquées depuis la dernière maintenance ou le début
+            missed_count = (today - base_date).days // report.periodicity
+            
+            # Si le compteur n'est pas à jour, le mettre à jour
+            if missed_count != calendar_record.missed_count:
+                calendar_record.missed_count = missed_count
+                db.session.add(calendar_record)
+            
+            overdue.append(
+                {
+                    "machine": machine,
+                    "report": report,
+                    "remaining": -days_overdue,  # Négatif pour indiquer le retard
+                    "last_performed": calendar_record.last_performed_date,
+                    "trigger_type": "calendar",
+                    "missed_count": calendar_record.missed_count,
+                    "next_due_date": next_due_date
+                }
+            )
+    
+    # Commit les mises à jour du compteur de retards
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     overdue.sort(key=lambda item: item["remaining"])
     warning.sort(key=lambda item: item["remaining"])
@@ -8130,7 +8401,33 @@ def ensure_all_progress_for_machine(machine: Machine):
 
 
 def get_report_min_hours_since(machine: Machine, report: PreventiveReport):
-    """Calcule le minimum des hours_since pour tous les compteurs liés à un plan"""
+    """Calcule le minimum des hours_since pour tous les compteurs liés à un plan, ou les jours restants pour les calendaires"""
+    if report.trigger_type == "calendar":
+        # Pour les maintenances calendaires, calculer les jours restants
+        calendar_progress = CalendarMaintenanceProgress.query.filter_by(
+            machine_id=machine.id,
+            report_id=report.id
+        ).first()
+        
+        if not calendar_progress or not report.calendar_start_date:
+            return 0.0
+        
+        today = dt.datetime.utcnow().date()
+        
+        # Calculer la date de prochaine échéance
+        if calendar_progress.last_performed_date:
+            # Basé sur la dernière maintenance effectuée
+            next_due_date = calendar_progress.last_performed_date + dt.timedelta(days=report.periodicity)
+        else:
+            # Basé sur la date de début du calendrier
+            next_due_date = report.calendar_start_date + dt.timedelta(days=report.periodicity)
+        
+        # Calculer les jours restants (négatif si en retard)
+        days_remaining = (next_due_date - today).days
+        
+        return float(days_remaining)
+    
+    # Maintenances basées sur compteur
     if report.report_counters:
         # Nouveau système : plusieurs compteurs
         min_hours = None
@@ -8162,6 +8459,34 @@ def get_report_min_hours_since(machine: Machine, report: PreventiveReport):
             ).first()
         
         return progress.hours_since if progress else 0.0
+
+
+def get_report_unit(machine: Machine, report: PreventiveReport):
+    """Retourne l'unité d'un plan de maintenance"""
+    if report.trigger_type == "calendar":
+        return "jours"
+    
+    # Pour les maintenances basées sur compteur
+    if report.report_counters:
+        # Nouveau système : plusieurs compteurs (ils ont tous la même unité grâce à la validation)
+        for report_counter in report.report_counters:
+            if report_counter.counter_id is None:
+                # Compteur machine classique
+                return machine.counter_unit or 'h'
+            else:
+                # Compteur multiple
+                counter = Counter.query.get(report_counter.counter_id)
+                if counter:
+                    return counter.unit or 'h'
+        return 'h'
+    else:
+        # Ancien système : compatibilité
+        if report.counter_id:
+            counter = Counter.query.get(report.counter_id)
+            if counter:
+                return counter.unit or 'h'
+        # Compteur machine classique
+        return machine.counter_unit or 'h'
 
 
 @app.route("/maintenance-photo/<int:photo_id>/view")

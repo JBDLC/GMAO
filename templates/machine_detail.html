@@ -671,11 +671,12 @@
             {% for item in template_progress %}
             {% set report = item.report %}
             {% set hours_remaining = item.hours_since %}
+            {% set unit = item.unit or (machine.counter_unit or 'h') %}
             <div class="col-md-6">
               <div class="template-card {% if hours_remaining <= 0 %}border-danger{% elif hours_remaining <= report.periodicity * 0.1 %}border-warning{% endif %}">
                 <div class="template-card-title">{{ report.name }}</div>
                 <div class="template-badges">
-                  <span class="badge bg-secondary">{{ report.periodicity }} h</span>
+                  <span class="badge bg-secondary">{{ report.periodicity }} {{ unit }}</span>
                   <span class="badge bg-info">{{ report.components|length }} {{ t('éléments') }}</span>
                   {% if hours_remaining <= 0 %}
                   <span class="badge bg-danger">{{ t('En retard') }}</span>
@@ -685,13 +686,22 @@
                 </div>
                 <p class="small text-muted mb-2">
                   <strong>{{ t('Avant maintenance') }} :</strong>
-                  {% set unit = machine.counter_unit or 'h' %}
-                  {% if hours_remaining < 0 %}
-                  <span class="text-danger">{{ "%.1f"|format(hours_remaining) }} {{ unit }} ({{ t('retard') }})</span>
-                  {% elif hours_remaining == 0 %}
-                  <span class="text-danger">0 {{ unit }} ({{ t('due') }})</span>
+                  {% if report.trigger_type == 'calendar' %}
+                    {% if hours_remaining < 0 %}
+                    <span class="text-danger">{{ (-hours_remaining)|int }} {{ unit }} ({{ t('retard') }})</span>
+                    {% elif hours_remaining == 0 %}
+                    <span class="text-danger">0 {{ unit }} ({{ t('due') }})</span>
+                    {% else %}
+                    <span>{{ hours_remaining|int }} {{ unit }}</span>
+                    {% endif %}
                   {% else %}
-                  <span>{{ "%.1f"|format(hours_remaining) }} {{ unit }}</span>
+                    {% if hours_remaining < 0 %}
+                    <span class="text-danger">{{ "%.1f"|format(hours_remaining) }} {{ unit }} ({{ t('retard') }})</span>
+                    {% elif hours_remaining == 0 %}
+                    <span class="text-danger">0 {{ unit }} ({{ t('due') }})</span>
+                    {% else %}
+                    <span>{{ "%.1f"|format(hours_remaining) }} {{ unit }}</span>
+                    {% endif %}
                   {% endif %}
                 </p>
                 <div class="btn-group w-100" role="group">

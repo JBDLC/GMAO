@@ -192,6 +192,41 @@
     flex-shrink: 0;
   }
   
+  .children-container {
+    display: none;
+  }
+  
+  .children-container.expanded {
+    display: block;
+  }
+  
+  .toggle-children-btn {
+    background: transparent;
+    border: none;
+    color: #1a3b50;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .toggle-children-btn:hover {
+    background: rgba(26, 59, 80, 0.1);
+  }
+  
+  .toggle-children-btn .icon {
+    transition: transform 0.3s;
+    display: inline-block;
+  }
+  
+  .toggle-children-btn.expanded .icon {
+    transform: rotate(-90deg);
+  }
+  
   .btn-view-machine {
     background-color: #1a3b50;
     border-color: #1a3b50;
@@ -454,17 +489,14 @@
 {% if children %}
 <div class="section-card">
   <div class="section-card-header">
-    <h5>{{ t('Sous-machines') }}</h5>
-    <button 
-      type="button" 
-      class="btn btn-sm btn-outline-secondary" 
-      id="toggle-children-btn"
-      onclick="toggleChildren()">
-      <span id="toggle-children-text">+ {{ t('Afficher') }}</span>
+    <h5>{{ t('Sous-machines') }} ({{ children|length }})</h5>
+    <button type="button" class="toggle-children-btn" id="toggleChildrenBtn" onclick="toggleChildren()">
+      <span class="icon">{{ icon_svg('arrow-left', 16) }}</span>
+      <span class="toggle-text">{{ t('Déplier') }}</span>
     </button>
   </div>
-  <div class="section-card-body" id="children-container" style="display: none;">
-    {% for child in children|sort(attribute='code') %}
+  <div class="section-card-body children-container" id="childrenContainer">
+    {% for child in children %}
     <div class="child-machine-card">
       <div class="child-machine-info">
         <strong>{{ child.name }}</strong>
@@ -498,20 +530,6 @@
     {% endfor %}
   </div>
 </div>
-<script>
-function toggleChildren() {
-  const container = document.getElementById('children-container');
-  const btnText = document.getElementById('toggle-children-text');
-  
-  if (container.style.display === 'none') {
-    container.style.display = 'block';
-    btnText.textContent = '− {{ t('Masquer') }}';
-  } else {
-    container.style.display = 'none';
-    btnText.textContent = '+ {{ t('Afficher') }}';
-  }
-}
-</script>
 {% endif %}
 
 <!-- Onglets -->
@@ -870,79 +888,22 @@ function toggleChildren() {
       });
     });
   });
-</script>
-{% endblock %}
-
-          <div class="d-flex justify-content-between align-items-center">
-            <a href="{{ url_for('download_machine_document', machine_id=machine.id, document_id=document.id) }}" target="_blank" class="text-decoration-none flex-grow-1">
-              <div>
-                <strong>{{ icon_svg('edit', 18) }} {{ document.original_filename }}</strong>
-                <div class="text-muted small mt-1">
-                  {{ t('Ajouté le') }} {{ document.uploaded_at.strftime("%d/%m/%Y %H:%M") }}
-                  {% if document.user %}
-                  {{ t('par') }} {{ document.user.username }}
-                  {% endif %}
-                </div>
-              </div>
-            </a>
-            {% if can_delete_machines() and not is_readonly_machines_maintenances() %}
-            <form method="post" action="{{ url_for('delete_machine_document', machine_id=machine.id, document_id=document.id) }}" class="d-inline ms-2" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce document ?') }}');">
-              <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer') }}">{{ icon_svg('delete', 16) }}</button>
-            </form>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <div class="empty-state">
-          <div class="empty-state-icon">{{ icon_svg('alert-circle', 48) }}</div>
-          <p>{{ t('Aucun document disponible') }} pour cette machine.</p>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Modal pour uploader un document -->
-{% if can_add_documentation() and not is_readonly_machines_maintenances() %}
-<div class="modal fade" id="uploadDocumentModal" tabindex="-1" aria-labelledby="uploadDocumentModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="uploadDocumentModalLabel">{{ t('Ajouter un document') }} PDF</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="post" action="{{ url_for('upload_machine_document', machine_id=machine.id) }}" enctype="multipart/form-data">
-        <div class="modal-body">
-          <div class="mb-3">
-            <label for="documentFile" class="form-label">{{ t('Fichier PDF') }}</label>
-            <input type="file" class="form-control" id="documentFile" name="file" accept=".pdf" required />
-            <div class="form-text">{{ t('Seuls les fichiers PDF sont acceptés.') }}</div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('Annuler') }}</button>
-          <button type="submit" class="btn btn-primary">{{ t('Uploader') }}</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<script>
-  // Mettre à jour l'URL avec le paramètre tab quand on clique sur un onglet
-  document.addEventListener('DOMContentLoaded', function() {
-    const tabButtons = document.querySelectorAll('[data-tab]');
-    tabButtons.forEach(function(button) {
-      button.addEventListener('shown.bs.tab', function(event) {
-        const tab = event.target.getAttribute('data-tab');
-        const url = new URL(window.location);
-        url.searchParams.set('tab', tab);
-        window.history.pushState({}, '', url);
-      });
-    });
-  });
+  
+  // Fonction pour déplier/replier les sous-machines
+  function toggleChildren() {
+    const container = document.getElementById('childrenContainer');
+    const btn = document.getElementById('toggleChildrenBtn');
+    const toggleText = btn.querySelector('.toggle-text');
+    
+    if (container.classList.contains('expanded')) {
+      container.classList.remove('expanded');
+      btn.classList.remove('expanded');
+      toggleText.textContent = '{{ t("Déplier") }}';
+    } else {
+      container.classList.add('expanded');
+      btn.classList.add('expanded');
+      toggleText.textContent = '{{ t("Replier") }}';
+    }
+  }
 </script>
 {% endblock %}

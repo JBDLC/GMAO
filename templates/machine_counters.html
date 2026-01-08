@@ -30,10 +30,6 @@
   }
   .table {
     margin-bottom: 0;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
   }
   .table thead th {
     color: #1a3b50;
@@ -137,6 +133,10 @@
     margin-left: 6px;
     border: 1px solid rgba(108, 117, 125, 0.2);
   }
+  .machine-group {
+    border-bottom: 2px solid rgba(26, 59, 80, 0.1);
+    margin-bottom: 4px;
+  }
   .machine-name-header {
     display: flex;
     align-items: center;
@@ -189,6 +189,13 @@
   </nav>
   <div class="d-flex justify-content-between align-items-center">
     <h1 class="page-title">{{ t('Compteurs de') }} {{ machine.name }}</h1>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{{ url_for('machines') }}">{{ t('Machines') }}</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('machine_detail', machine_id=machine.id) }}">{{ machine.name }}</a></li>
+        <li class="breadcrumb-item active">{{ t('Compteurs') }}</li>
+      </ol>
+    </nav>
     <a href="{{ url_for('new_counter', machine_id=machine.id) }}" class="btn btn-primary">+ {{ t('Nouveau compteur') }}</a>
   </div>
 </div>
@@ -202,7 +209,7 @@
           <tr>
             <th>{{ t('Machine / Compteur') }}</th>
             <th>{{ t('Code') }}</th>
-            <th>{{ t('Valeur actuelle') }}</th>
+            <th>{{ t('Valeur') }}</th>
             <th>{{ t('Unité') }}</th>
             <th>{{ t('Actions') }}</th>
           </tr>
@@ -266,20 +273,16 @@
                   </td>
                   <td style="padding: 12px; color: #6c757d; font-size: 0.9em;">{{ unit }}</td>
                   <td style="padding: 12px;">
-                    {% if machine_item.id == machine.id %}
                     <div class="btn-group">
                       <a href="{{ url_for('edit_counter', machine_id=machine_item.id, counter_id=counter.id) }}" class="btn btn-sm btn-outline-primary" title="{{ t('Modifier') }}">
-                        <img src="{{ url_for('static', filename='icons/edit.svg') }}" alt="{{ t('Modifier') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+                        {{ icon_svg('edit', 16) }}
                       </a>
                       <form method="post" action="{{ url_for('delete_counter', machine_id=machine_item.id, counter_id=counter.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir supprimer ce compteur ?') }}');">
                         <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ t('Supprimer') }}">
-                          <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="{{ t('Supprimer') }}" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+                          {{ icon_svg('delete', 16) }}
                         </button>
                       </form>
                     </div>
-                    {% else %}
-                    <span class="text-muted" style="font-size: 0.85em;">{{ t('Sous-machine') }}</span>
-                    {% endif %}
                   </td>
                 </tr>
               {% endfor %}
@@ -311,7 +314,7 @@
                 </td>
                 <td style="padding: 16px; color: #6c757d; font-size: 0.9em;">{{ unit }}</td>
                 <td style="padding: 16px;">
-                  <span class="text-muted" style="font-size: 0.85em;">{{ t('Compteur machine') }}</span>
+                  <span class="badge bg-info">{{ t('Compteur machine') }}</span>
                 </td>
               </tr>
             {% endif %}
@@ -326,7 +329,7 @@
 </div>
 {% else %}
 <div class="alert alert-info">
-  <p class="mb-0">{{ t('Aucun compteur configuré dans l\'arborescence de cette machine.') }}</p>
+  <p class="mb-0">{{ t('Aucun compteur configuré pour cette machine racine.') }}</p>
   <p class="mb-0 mt-2"><a href="{{ url_for('new_counter', machine_id=machine.id) }}" class="btn btn-primary btn-sm">{{ t('Créer le premier compteur') }}</a></p>
 </div>
 {% endif %}
@@ -335,3 +338,4 @@
   <a href="{{ url_for('machine_detail', machine_id=machine.id) }}" class="btn btn-secondary">{{ t('Retour à la machine') }}</a>
 </div>
 {% endblock %}
+

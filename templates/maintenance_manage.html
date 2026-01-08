@@ -312,31 +312,3 @@
 </div>
 {% endblock %}
 
-
-          </td>
-            <td>
-              <span class="fw-semibold">{{ "%.1f"|format(item.report.periodicity - item.remaining) }}</span>
-              <small class="text-muted"> {{ unit }}</small>
-            </td>
-            <td>
-              <span class="badge bg-secondary">{{ item.report.periodicity }} {{ unit }}</span>
-            </td>
-            <td class="text-end pe-3">
-              <span class="badge bg-warning text-dark">{{ "%.1f"|format(item.remaining) }} {{ unit }}</span>
-            </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-    <div class="p-4 text-center">
-      <p class="text-muted mb-0">
-        <img src="{{ url_for('static', filename='icons/check-circle.svg') }}" alt="" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; filter: brightness(0) saturate(100%) invert(67%) sepia(61%) saturate(400%) hue-rotate(90deg) brightness(95%) contrast(90%);"> {{ t('Aucun rapport proche de l\'échéance.') }}
-      </p>
-    </div>
-  {% endif %}
-  </div>
-</div>
-{% endblock %}
-

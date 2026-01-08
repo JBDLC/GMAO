@@ -12,7 +12,8 @@ from app import (
     User, Machine, FollowedMachine, Counter, Product, Stock, StockProduct,
     PreventiveReport, PreventiveComponent, MaintenanceEntry, MaintenanceEntryValue,
     CorrectiveMaintenance, CorrectiveMaintenanceProduct, CounterLog,
-    ChecklistTemplate, ChecklistItem, ChecklistInstance, MaintenanceProgress
+    ChecklistTemplate, ChecklistItem, ChecklistInstance, MaintenanceProgress,
+    get_user_accessible_machine_ids, can_user_access_machine, filter_machines_by_permissions
 )
 
 
@@ -79,12 +80,15 @@ def api_get_machines():
     """Récupérer la liste des machines"""
     user_id = get_jwt_identity()
     
-    # Récupérer toutes les machines racines avec leurs enfants
-    root_machines = Machine.query.filter_by(parent_id=None).options(
+    # Récupérer les machines racines accessibles selon les permissions
+    query = Machine.query.filter_by(parent_id=None).options(
         joinedload(Machine.children),
         joinedload(Machine.counters),
         joinedload(Machine.stock)
-    ).order_by(Machine.code).all()
+    ).order_by(Machine.code)
+    # Filtrer selon les permissions
+    query = filter_machines_by_permissions(query, user_id=user_id)
+    root_machines = query.all()
     
     def serialize_machine(machine, level=0):
         """Sérialiser une machine récursivement"""
@@ -130,12 +134,18 @@ def api_get_machines():
 @jwt_required()
 def api_get_machine(machine_id):
     """Récupérer les détails d'une machine"""
+    user_id = get_jwt_identity()
+    
     machine = Machine.query.options(
         joinedload(Machine.parent),
         joinedload(Machine.children),
         joinedload(Machine.counters),
         joinedload(Machine.stock)
     ).get_or_404(machine_id)
+    
+    # Vérifier les permissions d'accès à cette machine
+    if not can_user_access_machine(user_id, machine_id):
+        return jsonify({'error': 'Accès refusé à cette machine'}), 403
     
     # Récupérer les maintenances préventives
     preventive_entries = MaintenanceEntry.query.filter_by(
@@ -293,8 +303,12 @@ def api_unfollow_machine(machine_id):
 @jwt_required()
 def api_get_preventive_maintenances():
     """Récupérer les maintenances préventives"""
+    user_id = get_jwt_identity()
     machine_id = request.args.get('machine_id', type=int)
     limit = request.args.get('limit', 50, type=int)
+    
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids(user_id)
     
     query = MaintenanceEntry.query.options(
         joinedload(MaintenanceEntry.machine),
@@ -304,7 +318,13 @@ def api_get_preventive_maintenances():
     )
     
     if machine_id:
+        # Vérifier les permissions d'accès à cette machine
+        if accessible_ids is not None and machine_id not in accessible_ids:
+            return jsonify({'error': 'Accès refusé à cette machine'}), 403
         query = query.filter_by(machine_id=machine_id)
+    elif accessible_ids is not None:
+        # Filtrer selon les permissions si aucune machine spécifiée
+        query = query.filter(MaintenanceEntry.machine_id.in_(accessible_ids))
     
     entries = query.order_by(MaintenanceEntry.created_at.desc()).limit(limit).all()
     
@@ -334,6 +354,8 @@ def api_get_preventive_maintenances():
 @jwt_required()
 def api_get_preventive_maintenance(entry_id):
     """Récupérer une maintenance préventive spécifique"""
+    user_id = get_jwt_identity()
+    
     entry = MaintenanceEntry.query.options(
         joinedload(MaintenanceEntry.machine),
         joinedload(MaintenanceEntry.report),
@@ -341,6 +363,10 @@ def api_get_preventive_maintenance(entry_id):
         joinedload(MaintenanceEntry.user),
         joinedload(MaintenanceEntry.values)
     ).get_or_404(entry_id)
+    
+    # Vérifier les permissions d'accès à la machine de cette maintenance
+    if not can_user_access_machine(user_id, entry.machine_id):
+        return jsonify({'error': 'Accès refusé à cette maintenance'}), 403
     
     return jsonify({
         'success': True,
@@ -458,8 +484,12 @@ def api_create_preventive_maintenance():
 @jwt_required()
 def api_get_corrective_maintenances():
     """Récupérer les maintenances correctives"""
+    user_id = get_jwt_identity()
     machine_id = request.args.get('machine_id', type=int)
     limit = request.args.get('limit', 50, type=int)
+    
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids(user_id)
     
     query = CorrectiveMaintenance.query.options(
         joinedload(CorrectiveMaintenance.machine),
@@ -468,7 +498,13 @@ def api_get_corrective_maintenances():
     )
     
     if machine_id:
+        # Vérifier les permissions d'accès à cette machine
+        if accessible_ids is not None and machine_id not in accessible_ids:
+            return jsonify({'error': 'Accès refusé à cette machine'}), 403
         query = query.filter_by(machine_id=machine_id)
+    elif accessible_ids is not None:
+        # Filtrer selon les permissions si aucune machine spécifiée
+        query = query.filter(CorrectiveMaintenance.machine_id.in_(accessible_ids))
     
     maintenances = query.order_by(CorrectiveMaintenance.created_at.desc()).limit(limit).all()
     
@@ -496,11 +532,17 @@ def api_get_corrective_maintenances():
 @jwt_required()
 def api_get_corrective_maintenance(maintenance_id):
     """Récupérer une maintenance corrective spécifique"""
+    user_id = get_jwt_identity()
+    
     maintenance = CorrectiveMaintenance.query.options(
         joinedload(CorrectiveMaintenance.machine),
         joinedload(CorrectiveMaintenance.user),
         joinedload(CorrectiveMaintenance.products).joinedload(CorrectiveMaintenanceProduct.product)
     ).get_or_404(maintenance_id)
+    
+    # Vérifier les permissions d'accès à la machine de cette maintenance
+    if not can_user_access_machine(user_id, maintenance.machine_id):
+        return jsonify({'error': 'Accès refusé à cette maintenance'}), 403
     
     return jsonify({
         'success': True,
@@ -931,9 +973,16 @@ def api_get_dashboard():
     """Récupérer les données du dashboard pour l'utilisateur"""
     user_id = get_jwt_identity()
     
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids(user_id)
+    
     # Récupérer les machines suivies
     followed_machines = FollowedMachine.query.filter_by(user_id=user_id).all()
     machine_ids = [fm.machine_id for fm in followed_machines]
+    
+    # Filtrer les machines suivies selon les permissions
+    if accessible_ids is not None:
+        machine_ids = [mid for mid in machine_ids if mid in accessible_ids]
     
     if not machine_ids:
         return jsonify({

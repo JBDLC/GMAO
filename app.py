@@ -200,6 +200,68 @@ def is_spectator():
     return current_user.user_type == "spectateur"
 
 
+def get_user_accessible_machine_ids(user_id=None):
+    """Retourne la liste des IDs de machines accessibles à un utilisateur"""
+    if user_id is None:
+        if not current_user.is_authenticated:
+            return []
+        user_id = current_user.id
+    
+    user = User.query.get(user_id)
+    if not user:
+        return []
+    
+    # Les admins voient toutes les machines (pas de restrictions)
+    if user.user_type == "admin":
+        return None  # None signifie "toutes les machines"
+    
+    # Récupérer les machines directement assignées
+    permissions = UserMachinePermission.query.filter_by(user_id=user_id).all()
+    if not permissions:
+        # Si aucune permission spécifique, voir toutes les machines (comportement par défaut)
+        return None
+    
+    accessible_ids = set()
+    for perm in permissions:
+        machine = Machine.query.get(perm.machine_id)
+        if machine:
+            # Ajouter la machine elle-même et toutes ses sous-machines
+            accessible_ids.update(get_all_descendant_ids(machine))
+    
+    return list(accessible_ids)
+
+
+def get_all_descendant_ids(machine):
+    """Récupère récursivement tous les IDs des sous-machines (incluant la machine elle-même)"""
+    descendants = get_all_descendants(machine)
+    return [m.id for m in descendants]
+
+
+def can_user_access_machine(user_id, machine_id):
+    """Vérifie si un utilisateur peut accéder à une machine spécifique"""
+    accessible_ids = get_user_accessible_machine_ids(user_id)
+    if accessible_ids is None:  # Admin ou pas de restrictions
+        return True
+    return machine_id in accessible_ids
+
+
+def filter_machines_by_permissions(query, user_id=None):
+    """Filtre une requête de machines selon les permissions de l'utilisateur"""
+    if user_id is None:
+        if not current_user.is_authenticated:
+            return query.filter(False)  # Aucune machine si non authentifié
+        user_id = current_user.id
+    
+    accessible_ids = get_user_accessible_machine_ids(user_id)
+    if accessible_ids is None:  # Admin ou pas de restrictions
+        return query
+    
+    if not accessible_ids:
+        return query.filter(False)  # Aucune machine accessible
+    
+    return query.filter(Machine.id.in_(accessible_ids))
+
+
 # Context processor pour rendre les traductions disponibles dans tous les templates
 @app.context_processor
 def inject_translations():
@@ -337,6 +399,19 @@ class FollowedMachine(db.Model):
     machine = db.relationship("Machine", backref="followers")
 
     __table_args__ = (db.UniqueConstraint('user_id', 'machine_id', name='unique_user_machine_follow'),)
+
+
+class UserMachinePermission(db.Model):
+    """Permissions d'accès aux machines par utilisateur"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey("machine.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=dt.datetime.utcnow)
+
+    user = db.relationship("User", backref="machine_permissions")
+    machine = db.relationship("Machine", backref="user_permissions")
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'machine_id', name='unique_user_machine_permission'),)
 
 
 class Counter(db.Model):
@@ -1220,13 +1295,16 @@ def index():
     warning = []
 
     # Charger progress_records une seule fois avec eager loading
-    progress_records = (
+    accessible_ids = get_user_accessible_machine_ids()
+    query = (
         MaintenanceProgress.query
         .options(joinedload(MaintenanceProgress.machine), joinedload(MaintenanceProgress.report))
         .join(MaintenanceProgress.machine)
         .join(MaintenanceProgress.report)
-        .all()
     )
+    if accessible_ids is not None:
+        query = query.filter(MaintenanceProgress.machine_id.in_(accessible_ids))
+    progress_records = query.all()
 
     last_entry_rows = (
         db.session.query(
@@ -1360,14 +1438,16 @@ def index():
             current = current.parent
         return False
     
-    # Récupérer TOUTES les machines racines UNE SEULE FOIS avec eager loading des compteurs
-    all_roots = (
+    # Récupérer les machines racines accessibles UNE SEULE FOIS avec eager loading des compteurs
+    query = (
         Machine.query
         .filter_by(parent_id=None)
         .options(joinedload(Machine.counters), joinedload(Machine.parent))
         .order_by(Machine.code)
-        .all()
     )
+    # Filtrer selon les permissions
+    query = filter_machines_by_permissions(query)
+    all_roots = query.all()
     
     # Créer un mapping de couleur basé sur le color_index
     root_color_map = {root.id: (root.color_index if root.color_index is not None else 0) for root in all_roots}
@@ -1653,17 +1733,65 @@ def delete_user(user_id):
     return redirect(url_for("users"))
 
 
+@app.route("/users/<int:user_id>/machine-permissions", methods=["GET", "POST"])
+@admin_required
+def edit_user_machine_permissions(user_id):
+    """Gérer les permissions machines d'un utilisateur"""
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == "POST":
+        # Récupérer les machines sélectionnées
+        selected_machine_ids = request.form.getlist("machine_ids")
+        selected_machine_ids = [int(mid) for mid in selected_machine_ids if mid]
+        
+        # Supprimer toutes les permissions existantes pour cet utilisateur
+        UserMachinePermission.query.filter_by(user_id=user_id).delete()
+        
+        # Ajouter les nouvelles permissions
+        for machine_id in selected_machine_ids:
+            machine = Machine.query.get(machine_id)
+            if machine:
+                perm = UserMachinePermission(user_id=user_id, machine_id=machine_id)
+                db.session.add(perm)
+        
+        try:
+            db.session.commit()
+            flash("Permissions machines mises à jour avec succès", "success")
+        except Exception as exc:
+            db.session.rollback()
+            flash(f"Erreur lors de la mise à jour: {exc}", "danger")
+        
+        return redirect(url_for("users"))
+    
+    # GET : Afficher le formulaire
+    # Récupérer toutes les machines racines
+    all_machines = Machine.query.order_by(Machine.code).all()
+    
+    # Récupérer les machines actuellement autorisées pour cet utilisateur
+    current_permissions = UserMachinePermission.query.filter_by(user_id=user_id).all()
+    authorized_machine_ids = {perm.machine_id for perm in current_permissions}
+    
+    return render_template(
+        "user_machine_permissions.html",
+        user=user,
+        all_machines=all_machines,
+        authorized_machine_ids=authorized_machine_ids
+    )
+
+
 @app.route("/machines")
 @login_required
 def machines():
     # Charger les machines racines avec eager loading des compteurs
-    roots = (
+    query = (
         Machine.query
         .filter_by(parent_id=None)
         .options(joinedload(Machine.counters))
         .order_by(Machine.code)
-        .all()
     )
+    # Filtrer selon les permissions
+    query = filter_machines_by_permissions(query)
+    roots = query.all()
     
     # Calculer l'état de maintenance pour chaque machine
     threshold_ratio = 0.10
@@ -1836,6 +1964,11 @@ def machine_detail(machine_id):
         )
         .get_or_404(machine_id)
     )
+    
+    # Vérifier les permissions d'accès à cette machine
+    if not can_user_access_machine(current_user.id, machine.id):
+        flash("Vous n'avez pas accès à cette machine.", "danger")
+        return redirect(url_for("machines"))
     
     # Charger les entries avec eager loading
     entries = (
@@ -4562,6 +4695,11 @@ def new_maintenance():
         if not machine:
             flash("Machine introuvable", "danger")
             return redirect(request.url)
+        
+        # Vérifier les permissions d'accès à cette machine
+        if not can_user_access_machine(current_user.id, machine.id):
+            flash("Vous n'avez pas accès à cette machine.", "danger")
+            return redirect(url_for("machines"))
 
         # Trouver la machine racine
         root_machine = machine
@@ -4708,9 +4846,15 @@ def new_maintenance():
             flash(f"Erreur: {exc}", "danger")
             return redirect(request.url)
 
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids()
+    
     # Montrer toutes les machines qui ont un compteur OU qui ont une machine racine avec des compteurs
     machines_with_counter = []
-    all_machines = Machine.query.order_by(Machine.code).all()
+    query = Machine.query.order_by(Machine.code)
+    if accessible_ids is not None:
+        query = query.filter(Machine.id.in_(accessible_ids))
+    all_machines = query.all()
     
     for machine in all_machines:
         # Vérifier si la machine a son propre compteur
@@ -4742,8 +4886,10 @@ def new_maintenance():
                 has_root_counters = root_machine.is_root() and root_machine.counters
                 
                 if has_own_counter or has_root_counters:
-                    selected_machine_id = param_id
-                    selected_machine = param_machine
+                    # Vérifier les permissions d'accès à cette machine
+                    if can_user_access_machine(current_user.id, param_id):
+                        selected_machine_id = param_id
+                        selected_machine = param_machine
         except (TypeError, ValueError):
             pass
     
@@ -4759,6 +4905,11 @@ def edit_maintenance(report_id):
     """Modifier un plan de maintenance préventive"""
     report = PreventiveReport.query.get_or_404(report_id)
     machine = report.machine
+    
+    # Vérifier les permissions d'accès à cette machine
+    if not can_user_access_machine(current_user.id, machine.id):
+        flash("Vous n'avez pas accès à cette machine.", "danger")
+        return redirect(url_for("machines"))
     
     if request.method == "POST":
         name = request.form["name"].strip()
@@ -5244,6 +5395,12 @@ def get_available_counters(machine_id):
 @admin_or_technician_required
 def fill_maintenance(machine_id, report_id):
     machine = Machine.query.get_or_404(machine_id)
+    
+    # Vérifier les permissions d'accès à cette machine
+    if not can_user_access_machine(current_user.id, machine.id):
+        flash("Vous n'avez pas accès à cette machine.", "danger")
+        return redirect(url_for("machines"))
+    
     report = PreventiveReport.query.filter_by(id=report_id, machine_id=machine_id).first_or_404()
     
     # Pour les maintenances basées sur compteur, vérifier que la machine a un compteur OU que la machine racine a des compteurs
@@ -5500,6 +5657,11 @@ def fill_maintenance(machine_id, report_id):
 def maintenance_entry_detail(entry_id):
     entry = MaintenanceEntry.query.get_or_404(entry_id)
     
+    # Vérifier les permissions d'accès à la machine de cette maintenance
+    if not can_user_access_machine(current_user.id, entry.machine_id):
+        flash("Vous n'avez pas accès à cette maintenance.", "danger")
+        return redirect(url_for("maintenances_list"))
+    
     # Récupérer le mouvement de sortie associé à cette maintenance (créé à peu près en même temps)
     movement = None
     if entry.stock:
@@ -5525,6 +5687,11 @@ def maintenance_entry_detail(entry_id):
 @admin_required
 def delete_maintenance_entry(entry_id):
     entry = MaintenanceEntry.query.get_or_404(entry_id)
+    
+    # Vérifier les permissions d'accès à la machine de cette maintenance
+    if not can_user_access_machine(current_user.id, entry.machine_id):
+        flash("Vous n'avez pas accès à cette maintenance.", "danger")
+        return redirect(url_for("maintenances_list"))
     machine_id = entry.machine.id
     
     # Récupérer le mouvement de sortie associé à cette maintenance (créé à peu près en même temps)
@@ -5571,6 +5738,11 @@ def delete_maintenance_entry(entry_id):
 @login_required
 def edit_maintenance_entry(entry_id):
     entry = MaintenanceEntry.query.get_or_404(entry_id)
+    
+    # Vérifier les permissions d'accès à la machine de cette maintenance
+    if not can_user_access_machine(current_user.id, entry.machine_id):
+        flash("Vous n'avez pas accès à cette maintenance.", "danger")
+        return redirect(url_for("maintenances_list"))
     
     # Vérifier les permissions : admin ou technicien qui a créé le rapport
     if not can_edit_maintenance_entry(entry):
@@ -5893,6 +6065,12 @@ def new_corrective_maintenance(machine_id):
 @login_required
 def corrective_maintenance_detail(maintenance_id):
     maintenance = CorrectiveMaintenance.query.get_or_404(maintenance_id)
+    
+    # Vérifier les permissions d'accès à la machine de cette maintenance
+    if not can_user_access_machine(current_user.id, maintenance.machine_id):
+        flash("Vous n'avez pas accès à cette maintenance.", "danger")
+        return redirect(url_for("maintenances_list"))
+    
     # Récupérer les photos
     photos = MaintenancePhoto.query.filter_by(corrective_maintenance_id=maintenance_id).order_by(MaintenancePhoto.uploaded_at).all()
     return render_template("corrective_maintenance_detail.html", maintenance=maintenance, photos=photos)
@@ -5902,6 +6080,11 @@ def corrective_maintenance_detail(maintenance_id):
 @login_required
 def edit_corrective_maintenance(maintenance_id):
     maintenance = CorrectiveMaintenance.query.get_or_404(maintenance_id)
+    
+    # Vérifier les permissions d'accès à la machine de cette maintenance
+    if not can_user_access_machine(current_user.id, maintenance.machine_id):
+        flash("Vous n'avez pas accès à cette maintenance.", "danger")
+        return redirect(url_for("maintenances_list"))
     
     # Vérifier les permissions : admin ou technicien qui a créé le rapport
     if current_user.user_type != "admin" and (current_user.user_type != "technicien" or maintenance.user_id != current_user.id):
@@ -6073,11 +6256,20 @@ def maintenances_list():
     filter_machine = request.args.get('filter_machine', '').strip().lower()
     filter_user = request.args.get('filter_user', '').strip().lower()
     
-    # Récupérer toutes les maintenances préventives
-    preventive_entries = MaintenanceEntry.query.order_by(MaintenanceEntry.created_at.desc()).all()
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids()
     
-    # Récupérer toutes les maintenances correctives
-    corrective_maintenances = CorrectiveMaintenance.query.order_by(CorrectiveMaintenance.created_at.desc()).all()
+    # Récupérer les maintenances préventives filtrées par permissions
+    preventive_query = MaintenanceEntry.query.order_by(MaintenanceEntry.created_at.desc())
+    if accessible_ids is not None:
+        preventive_query = preventive_query.filter(MaintenanceEntry.machine_id.in_(accessible_ids))
+    preventive_entries = preventive_query.all()
+    
+    # Récupérer les maintenances correctives filtrées par permissions
+    corrective_query = CorrectiveMaintenance.query.order_by(CorrectiveMaintenance.created_at.desc())
+    if accessible_ids is not None:
+        corrective_query = corrective_query.filter(CorrectiveMaintenance.machine_id.in_(accessible_ids))
+    corrective_maintenances = corrective_query.all()
     
     # Créer une liste unifiée avec type, nom, date, machine
     all_maintenances = []
@@ -6176,11 +6368,20 @@ def export_maintenances():
     filter_machine = request.args.get('filter_machine', '').strip().lower()
     filter_user = request.args.get('filter_user', '').strip().lower()
     
-    # Récupérer toutes les maintenances préventives
-    preventive_entries = MaintenanceEntry.query.order_by(MaintenanceEntry.created_at.desc()).all()
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids()
     
-    # Récupérer toutes les maintenances correctives
-    corrective_maintenances = CorrectiveMaintenance.query.order_by(CorrectiveMaintenance.created_at.desc()).all()
+    # Récupérer les maintenances préventives filtrées par permissions
+    preventive_query = MaintenanceEntry.query.order_by(MaintenanceEntry.created_at.desc())
+    if accessible_ids is not None:
+        preventive_query = preventive_query.filter(MaintenanceEntry.machine_id.in_(accessible_ids))
+    preventive_entries = preventive_query.all()
+    
+    # Récupérer les maintenances correctives filtrées par permissions
+    corrective_query = CorrectiveMaintenance.query.order_by(CorrectiveMaintenance.created_at.desc())
+    if accessible_ids is not None:
+        corrective_query = corrective_query.filter(CorrectiveMaintenance.machine_id.in_(accessible_ids))
+    corrective_maintenances = corrective_query.all()
     
     # Créer une liste unifiée avec type, nom, date, machine
     all_maintenances = []
@@ -6316,11 +6517,14 @@ def maintenance_manage():
     warning = []
 
     # Maintenances basées sur compteur
-    progress_records = (
+    accessible_ids = get_user_accessible_machine_ids()
+    query = (
         MaintenanceProgress.query.join(MaintenanceProgress.machine).join(MaintenanceProgress.report)
         .filter(PreventiveReport.trigger_type == 'counter')
-        .all()
     )
+    if accessible_ids is not None:
+        query = query.filter(MaintenanceProgress.machine_id.in_(accessible_ids))
+    progress_records = query.all()
 
     last_entry_rows = (
         db.session.query(
@@ -6363,13 +6567,16 @@ def maintenance_manage():
 
     # Maintenances calendaires dépassées uniquement
     today = dt.datetime.utcnow().date()
-    calendar_progress_records = CalendarMaintenanceProgress.query.join(
+    calendar_query = CalendarMaintenanceProgress.query.join(
         CalendarMaintenanceProgress.machine
     ).join(
         CalendarMaintenanceProgress.report
     ).filter(
         PreventiveReport.trigger_type == 'calendar'
-    ).all()
+    )
+    if accessible_ids is not None:
+        calendar_query = calendar_query.filter(CalendarMaintenanceProgress.machine_id.in_(accessible_ids))
+    calendar_progress_records = calendar_query.all()
     
     for calendar_record in calendar_progress_records:
         machine = calendar_record.machine
@@ -6455,6 +6662,11 @@ def counter_report(machine_id=None):
             flash("Cette route est réservée aux machines racines.", "danger")
             return redirect(url_for("machines"))
         
+        # Vérifier les permissions d'accès à cette machine
+        if not can_user_access_machine(current_user.id, root_machine.id):
+            flash("Vous n'avez pas accès à cette machine.", "danger")
+            return redirect(url_for("machines"))
+        
         # Construire la hiérarchie des compteurs
         counter_hierarchy = build_counter_hierarchy(root_machine, depth=0)
         
@@ -6462,8 +6674,11 @@ def counter_report(machine_id=None):
             flash(f"Aucun compteur configuré dans l'arborescence de {root_machine.name}.", "warning")
             return redirect(url_for("machines"))
     else:
-        # Comportement par défaut : toutes les machines racines avec leurs hiérarchies
-        all_root_machines = Machine.query.filter_by(parent_id=None).order_by(Machine.code).all()
+        # Comportement par défaut : toutes les machines racines accessibles avec leurs hiérarchies
+        query = Machine.query.filter_by(parent_id=None).order_by(Machine.code)
+        # Filtrer selon les permissions
+        query = filter_machines_by_permissions(query)
+        all_root_machines = query.all()
         for root in all_root_machines:
             root_hierarchy = build_counter_hierarchy(root, depth=0)
             counter_hierarchy.extend(root_hierarchy)
@@ -8714,17 +8929,28 @@ def get_dashboard_data():
         except (ValueError, TypeError):
             pass
     
-    # Récupérer toutes les machines suivies par l'utilisateur si aucune machine spécifiée
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids()
+    
+    # Si aucune machine spécifiée, utiliser les machines accessibles
     if not selected_machine_ids:
-        followed_machines = FollowedMachine.query.filter_by(user_id=current_user.id).all()
-        selected_machine_ids = [fm.machine_id for fm in followed_machines]
+        if accessible_ids is None:
+            # Admin ou pas de restrictions - utiliser les machines suivies
+            followed_machines = FollowedMachine.query.filter_by(user_id=current_user.id).all()
+            selected_machine_ids = [fm.machine_id for fm in followed_machines]
+        else:
+            # Utiliser les machines accessibles
+            selected_machine_ids = accessible_ids
+    
+    # Filtrer les machines sélectionnées selon les permissions
+    if accessible_ids is not None:
+        selected_machine_ids = [mid for mid in selected_machine_ids if mid in accessible_ids]
     
     # Si aucune machine, retourner des données vides
     if not selected_machine_ids:
         return jsonify({
             'success': True,
-            'data': [],
-            'period': period
+            'data': []
         })
     
     # Récupérer les machines directement sélectionnées
@@ -8921,10 +9147,17 @@ def get_dashboard_chart_data():
         # Si aucune date, utiliser le groupement par mois
         time_group = 'month'
     
+    # Récupérer les machines accessibles selon les permissions
+    accessible_ids = get_user_accessible_machine_ids()
+    
     # Récupérer toutes les machines suivies par l'utilisateur si aucune machine spécifiée
     if not selected_machine_ids:
         followed_machines = FollowedMachine.query.filter_by(user_id=current_user.id).all()
         selected_machine_ids = [fm.machine_id for fm in followed_machines]
+    
+    # Filtrer les machines sélectionnées selon les permissions
+    if accessible_ids is not None:
+        selected_machine_ids = [mid for mid in selected_machine_ids if mid in accessible_ids]
     
     # Si aucune machine, retourner des données vides
     if not selected_machine_ids:

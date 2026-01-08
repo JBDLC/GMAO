@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Permissions machines') }} - {{ user.username }}{% endblock %}
+{% block content %}
+<style>
+  .page-header {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-title::before {
+    content: '';
+    width: 4px;
+    height: 32px;
+    background: linear-gradient(135deg, #1a3b50 0%, #03192f 100%);
+    border-radius: 2px;
+  }
+  .form-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .machine-list {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 1rem;
+    background: #f8f9fa;
+  }
+  .machine-item {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+  }
+  .machine-item:hover {
+    background: #e9ecef;
+  }
+  .machine-item input[type="checkbox"] {
+    margin-right: 0.5rem;
+  }
+  .machine-code {
+    color: #6c757d;
+    font-size: 0.9em;
+    margin-left: 0.5rem;
+  }
+  .btn-success {
+    background-color: #1a3b50;
+    border-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-success:hover {
+    background-color: #03192f;
+    border-color: #03192f;
+    color: white;
+  }
+  .info-box {
+    background: #e3f2fd;
+    border-left: 4px solid #1a3b50;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+  }
+</style>
+
+<div class="page-header">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="{{ url_for('users') }}">{{ t('Utilisateurs') }}</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ t('Permissions machines') }}</li>
+    </ol>
+  </nav>
+  <h1 class="page-title">{{ t('Permissions machines') }} - {{ user.username }}</h1>
+</div>
+
+<div class="info-box">
+  <strong>{{ t('Note') }}:</strong> {{ t('Si aucune machine n\'est sélectionnée, l\'utilisateur verra toutes les machines. Si des machines sont sélectionnées, l\'utilisateur ne verra que ces machines et leurs sous-machines.') }}
+</div>
+
+<div class="form-card">
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label">{{ t('Sélectionner les machines accessibles') }}</label>
+      <div class="machine-list">
+        {% for machine in all_machines %}
+        <div class="machine-item">
+          <label style="cursor: pointer; margin: 0; width: 100%; display: flex; align-items: center;">
+            <input 
+              type="checkbox" 
+              name="machine_ids" 
+              value="{{ machine.id }}"
+              {% if machine.id in authorized_machine_ids %}checked{% endif %}
+            />
+            <span>
+              <strong>{{ machine.name }}</strong>
+              <span class="machine-code">({{ machine.code }})</span>
+            </span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    
+    <div class="mt-4">
+      <button type="submit" class="btn btn-success">{{ t('Enregistrer') }}</button>
+      <a href="{{ url_for('users') }}" class="btn btn-secondary">{{ t('Annuler') }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+

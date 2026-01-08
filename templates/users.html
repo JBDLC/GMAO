@@ -137,6 +137,9 @@
         </td>
         <td>
           <div class="d-flex gap-2">
+            <a href="{{ url_for('edit_user_machine_permissions', user_id=user.id) }}" class="btn btn-primary btn-sm" title="{{ t('Gérer les permissions machines') }}">
+              {{ t('Machines') }}
+            </a>
             {% if user.username != "admin123" %}
             <form method="post" action="{{ url_for('reset_user_password', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('{{ t('Êtes-vous sûr de vouloir réinitialiser le mot de passe de cet utilisateur ? Le nouveau mot de passe sera : 123') }}');">
               <button class="btn btn-warning btn-sm" type="submit" title="{{ t('Réinitialiser le mot de passe') }}">

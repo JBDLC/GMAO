@@ -7753,7 +7753,7 @@ def reverse_movement_rules(movement: Movement):
 
 def build_machine_tree(node, level=0):
     yield node, level
-    for child in sorted(node.children, key=lambda c: c.name):
+    for child in sorted(node.children, key=lambda c: c.code):
         yield from build_machine_tree(child, level + 1)
 
 

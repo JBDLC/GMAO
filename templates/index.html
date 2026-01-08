@@ -71,7 +71,7 @@
     
     {% if has_children %}
     <div class="machine-children collapsed" id="children-{{ node.id }}">
-      {% for child in node.children|sort(attribute='name') %}
+      {% for child in node.children|sort(attribute='code') %}
         {{ render_machine_node(child, child.depth(), color_index) }}
       {% endfor %}
     </div>
@@ -1333,7 +1333,7 @@
         
         {% if root_has_children %}
         <div class="machine-children collapsed" id="children-{{ root.id }}">
-          {% for child in root.children|sort(attribute='name') %}
+          {% for child in root.children|sort(attribute='code') %}
             {{ render_machine_node(child, child.depth(), color_index) }}
           {% endfor %}
         </div>

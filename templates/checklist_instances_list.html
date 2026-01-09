@@ -94,8 +94,8 @@
       <div class="flex-grow-1">
         <strong>Check list remplie</strong>
         <div class="text-muted small mt-1">
-          {% set checked_count = instance.values|selectattr('checked', 'equalto', true)|list|length %}
-          {{ checked_count }}/{{ template.items|length }} élément(s) cochés
+          {% set row_count = template.rows|length %}
+          {{ row_count }} ligne(s) dans le modèle
         </div>
       </div>
       <small class="text-muted">

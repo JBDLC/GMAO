@@ -12,7 +12,7 @@ from app import (
     User, Machine, FollowedMachine, Counter, Product, Stock, StockProduct,
     PreventiveReport, PreventiveComponent, MaintenanceEntry, MaintenanceEntryValue,
     CorrectiveMaintenance, CorrectiveMaintenanceProduct, CounterLog,
-    ChecklistTemplate, ChecklistItem, ChecklistInstance, MaintenanceProgress
+    ChecklistTemplate, ChecklistColumn, ChecklistTemplateRow, ChecklistTemplateRowValue, ChecklistInstance, ChecklistInstanceValue, MaintenanceProgress
 )
 
 
@@ -157,7 +157,7 @@ def api_get_machine(machine_id):
     checklist_templates = ChecklistTemplate.query.filter_by(
         machine_id=machine_id
     ).options(
-        joinedload(ChecklistTemplate.items)
+        joinedload(ChecklistTemplate.columns)
     ).all()
     
     # Récupérer les progress de maintenance
@@ -610,7 +610,7 @@ def api_get_checklists():
     
     query = ChecklistTemplate.query.options(
         joinedload(ChecklistTemplate.machine),
-        joinedload(ChecklistTemplate.items)
+        joinedload(ChecklistTemplate.columns)
     )
     
     if machine_id:
@@ -626,11 +626,21 @@ def api_get_checklists():
             'machine_name': t.machine.name if t.machine else None,
             'name': t.name,
             'created_at': t.created_at.isoformat(),
-            'items': [{
-                'id': i.id,
-                'label': i.label,
-                'order': i.order
-            } for i in sorted(t.items, key=lambda x: x.order)]
+            'columns': [{
+                'id': c.id,
+                'name': c.name,
+                'fill_type': c.fill_type,
+                'has_unit': c.has_unit,
+                'order': c.order
+            } for c in sorted(t.columns, key=lambda x: x.order)],
+            'rows': [{
+                'id': r.id,
+                'order': r.order,
+                'admin_values': [{
+                    'column_id': v.column_id,
+                    'value': v.value
+                } for v in r.admin_values]
+            } for r in sorted(t.rows, key=lambda x: x.order)]
         } for t in templates]
     }), 200
 
@@ -647,7 +657,7 @@ def api_fill_checklist(template_id):
     
     machine_id = data.get('machine_id')
     comment = data.get('comment', '')
-    items = data.get('items', [])  # Liste de {item_id, checked}
+    values = data.get('values', [])  # Liste de {template_row_id, column_id, value}
     
     if not machine_id:
         return jsonify({'error': 'machine_id requis'}), 400
@@ -665,22 +675,32 @@ def api_fill_checklist(template_id):
     db.session.add(instance)
     db.session.flush()
     
-    # Ajouter les items cochés
-    for item_data in items:
-        item_id = item_data.get('item_id')
-        checked = item_data.get('checked', False)
+    # Ajouter les valeurs utilisateur pour chaque ligne du template
+    for value_data in values:
+        template_row_id = value_data.get('template_row_id')
+        column_id = value_data.get('column_id')
+        value = value_data.get('value', '')
         
-        if checked and item_id:
-            # Vérifier que l'item appartient au template
-            item = ChecklistItem.query.filter_by(
-                id=item_id,
+        if template_row_id and column_id:
+            # Vérifier que la ligne et la colonne appartiennent au template
+            template_row = ChecklistTemplateRow.query.filter_by(
+                id=template_row_id,
                 template_id=template_id
             ).first()
             
-            if item:
-                # Ici vous pourriez avoir une table ChecklistInstanceItem
-                # Pour simplifier, on stocke juste dans le commentaire ou une table séparée
-                pass
+            column = ChecklistColumn.query.filter_by(
+                id=column_id,
+                template_id=template_id
+            ).first()
+            
+            if template_row and column and column.fill_type.startswith('user_'):
+                instance_value = ChecklistInstanceValue(
+                    instance_id=instance.id,
+                    template_row_id=template_row_id,
+                    column_id=column_id,
+                    value=str(value) if value else ''
+                )
+                db.session.add(instance_value)
     
     try:
         db.session.commit()

@@ -30,18 +30,27 @@
     padding: 2rem;
     margin-bottom: 2rem;
   }
+  .section-title {
+    color: #1a3b50;
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #1a3b50;
+  }
   .form-label {
     color: #1a3b50;
     font-weight: 600;
     margin-bottom: 0.5rem;
   }
-  .form-control {
+  .form-control, .form-select {
     border: 1px solid #ced4da;
     border-radius: 4px;
     padding: 0.5rem 0.75rem;
     transition: all 0.2s;
   }
-  .form-control:focus {
+  .form-control:focus, .form-select:focus {
     border-color: #1a3b50;
     box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
     outline: none;
@@ -86,6 +95,24 @@
     background-color: #dc3545;
     color: white;
   }
+  .column-row, .row-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  .row-card h6 {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  .admin-column-input {
+    margin-bottom: 0.75rem;
+  }
+  .admin-column-input:last-child {
+    margin-bottom: 0;
+  }
   
   /* Responsive */
   @media (max-width: 768px) {
@@ -95,6 +122,10 @@
     
     .btn-success, .btn-secondary, .btn-outline-primary, .btn-outline-danger {
       width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    
+    .column-row .row > div, .row-card .row > div {
       margin-bottom: 0.5rem;
     }
   }
@@ -118,43 +149,148 @@
 </div>
 
 <div class="form-card">
-<form method="post">
+<form method="post" id="checklist-form">
   <div class="mb-3">
     <label class="form-label">Nom de la check list <span class="text-danger">*</span></label>
     <input type="text" class="form-control" name="name" value="{{ template.name if template else '' }}" required />
   </div>
   
+  <h2 class="section-title">1. Définir les colonnes</h2>
+  {% if not template %}
   <div class="mb-3">
-    <label class="form-label">Éléments de la check list</label>
-    {% if not template %}
-    <div class="mb-3">
-      <label class="form-label">Charger depuis un modèle existant (optionnel)</label>
-      <select class="form-select" id="loadFromTemplate" onchange="loadTemplateItems(this.value)">
-        <option value="">Sélectionner une checklist pour pré-remplir les éléments...</option>
-        {% for checklist in all_checklists %}
-        <option value="{{ checklist.id }}">{{ checklist.name }} ({{ checklist.machine.name }})</option>
-        {% endfor %}
-      </select>
-      <small class="form-text text-muted">Sélectionnez une checklist existante pour pré-remplir les éléments. Vous pourrez ensuite les modifier ou en ajouter d'autres.</small>
-    </div>
-    {% endif %}
-    <div id="items-container">
-      {% if template and template.items %}
-        {% for item in template.items %}
-        <div class="input-group mb-2 item-row">
-          <input type="text" class="form-control" name="item_label" value="{{ item.label }}" placeholder="Libellé de l'élément" />
-          <button type="button" class="btn btn-outline-danger remove-item"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
-        </div>
-        {% endfor %}
-      {% else %}
-        <div class="input-group mb-2 item-row">
-          <input type="text" class="form-control" name="item_label" placeholder="Libellé de l'élément" />
-          <button type="button" class="btn btn-outline-danger remove-item"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
-        </div>
-      {% endif %}
-    </div>
-    <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-item">+ Ajouter un élément</button>
+    <label class="form-label">Charger depuis un modèle existant (optionnel)</label>
+    <select class="form-select" id="loadFromTemplate" onchange="loadTemplateColumns(this.value)">
+      <option value="">Sélectionner une checklist pour pré-remplir les colonnes...</option>
+      {% for checklist in all_checklists %}
+      <option value="{{ checklist.id }}">{{ checklist.name }} ({{ checklist.machine.name }})</option>
+      {% endfor %}
+    </select>
+    <small class="form-text text-muted">Sélectionnez une checklist existante pour pré-remplir les colonnes. Vous pourrez ensuite les modifier ou en ajouter d'autres.</small>
   </div>
+  {% endif %}
+  <div id="columns-container">
+    {% if columns %}
+      {% for column in columns %}
+      <div class="column-row">
+        <div class="row">
+          <div class="col-md-3">
+            <label class="form-label">Nom de la colonne <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="column_name" value="{{ column.name }}" placeholder="Ex: Température" required />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Type de remplissage <span class="text-danger">*</span></label>
+            <select class="form-select column-type" name="column_type" required>
+              <option value="admin" {% if column.fill_type == 'admin' %}selected{% endif %}>Rempli par l'admin</option>
+              <option value="user_text" {% if column.fill_type == 'user_text' %}selected{% endif %}>Utilisateur - Texte libre</option>
+              <option value="user_number" {% if column.fill_type == 'user_number' %}selected{% endif %}>Utilisateur - Nombre</option>
+              <option value="user_date" {% if column.fill_type == 'user_date' %}selected{% endif %}>Utilisateur - Date</option>
+              <option value="user_checkbox" {% if column.fill_type == 'user_checkbox' %}selected{% endif %}>Utilisateur - Case à cocher</option>
+            </select>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input column-has-unit" type="checkbox" name="column_has_unit_{{ loop.index0 }}" id="column_has_unit_{{ loop.index0 }}" value="on" {% if column.has_unit %}checked{% endif %} />
+              <label class="form-check-label" for="column_has_unit_{{ loop.index0 }}">
+                Cette colonne a une unité
+              </label>
+            </div>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-danger w-100 remove-column">
+              <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="column-row">
+        <div class="row">
+          <div class="col-md-3">
+            <label class="form-label">Nom de la colonne <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="column_name" placeholder="Ex: Température" required />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Type de remplissage <span class="text-danger">*</span></label>
+            <select class="form-select column-type" name="column_type" required>
+              <option value="admin">Rempli par l'admin</option>
+              <option value="user_text">Utilisateur - Texte libre</option>
+              <option value="user_number">Utilisateur - Nombre</option>
+              <option value="user_date">Utilisateur - Date</option>
+              <option value="user_checkbox">Utilisateur - Case à cocher</option>
+            </select>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input column-has-unit" type="checkbox" name="column_has_unit" />
+              <label class="form-check-label">
+                Cette colonne a une unité
+              </label>
+            </div>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-danger w-100 remove-column">
+              <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+            </button>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+  <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-column">+ Ajouter une colonne</button>
+  
+  <h2 class="section-title">2. Créer les lignes/questions</h2>
+  <p class="text-muted">Remplissez les colonnes de type "Rempli par l'admin" pour chaque ligne/question.</p>
+  <input type="hidden" name="row_count" id="row_count" value="{{ rows|length }}" />
+  <div id="rows-container">
+    {% if rows %}
+      {% for row in rows %}
+      {% set row_index = loop.index0 %}
+      <div class="row-card" data-row-id="{{ row_index }}">
+        <h6>Ligne {{ loop.index }}</h6>
+        {% for column in columns %}
+          {% if column.fill_type == 'admin' %}
+            {% set row_value = row.admin_values|selectattr('column_id', 'equalto', column.id)|first %}
+            <div class="admin-column-input">
+              <div class="row">
+                {% if column.has_unit %}
+                <div class="col-md-8">
+                  <label class="form-label">{{ column.name }} <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="row_{{ row_index }}_col_{{ column.id }}_admin_value" value="{{ row_value.value if row_value else '' }}" placeholder="Valeur pour cette ligne" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Unité (optionnel)</label>
+                  <input type="text" class="form-control" name="row_{{ row_index }}_col_{{ column.id }}_admin_unit" value="{{ row_value.unit if row_value else '' }}" placeholder="Ex: °C, kg, L" />
+                </div>
+                {% else %}
+                <div class="col-md-12">
+                  <label class="form-label">{{ column.name }} <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="row_{{ row_index }}_col_{{ column.id }}_admin_value" value="{{ row_value.value if row_value else '' }}" placeholder="Valeur pour cette ligne" required />
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          {% elif column.has_unit %}
+            {% set row_value = row.admin_values|selectattr('column_id', 'equalto', column.id)|first %}
+            <div class="admin-column-input">
+              <div class="row">
+                <div class="col-md-12">
+                  <label class="form-label">Unité pour {{ column.name }} (optionnel)</label>
+                  <input type="text" class="form-control" name="row_{{ row_index }}_col_{{ column.id }}_admin_unit" value="{{ row_value.unit if row_value else '' }}" placeholder="Ex: °C, kg, L" />
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        {% endfor %}
+        <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-row">
+          <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+          Supprimer cette ligne
+        </button>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-row">+ Ajouter une ligne/question</button>
   
   <div class="d-flex gap-2 mt-4">
     <button type="submit" class="btn btn-success">Enregistrer</button>
@@ -166,88 +302,434 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  const container = document.getElementById('items-container');
-  const addButton = document.getElementById('add-item');
+  const columnsContainer = document.getElementById('columns-container');
+  const rowsContainer = document.getElementById('rows-container');
+  const addColumnButton = document.getElementById('add-column');
+  const addRowButton = document.getElementById('add-row');
+  const rowCountInput = document.getElementById('row_count');
+  let rowCount = parseInt(rowCountInput.value) || 0;
   
-  addButton.addEventListener('click', function() {
+  // Fonction pour créer une nouvelle colonne
+  function createColumnRow() {
     const row = document.createElement('div');
-    row.className = 'input-group mb-2 item-row';
+    row.className = 'column-row';
+    // Calculer l'index de la nouvelle colonne
+    const colIndex = columnsContainer.querySelectorAll('.column-row').length;
     row.innerHTML = `
-      <input type="text" class="form-control" name="item_label" placeholder="Libellé de l'élément" />
-      <button type="button" class="btn btn-outline-danger remove-item"><img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;"></button>
+      <div class="row">
+        <div class="col-md-3">
+          <label class="form-label">Nom de la colonne <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" name="column_name" placeholder="Ex: Température" required />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Type de remplissage <span class="text-danger">*</span></label>
+          <select class="form-select column-type" name="column_type" required>
+            <option value="admin">Rempli par l'admin</option>
+            <option value="user_text">Utilisateur - Texte libre</option>
+            <option value="user_number">Utilisateur - Nombre</option>
+            <option value="user_date">Utilisateur - Date</option>
+            <option value="user_checkbox">Utilisateur - Case à cocher</option>
+          </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <div class="form-check">
+            <input class="form-check-input column-has-unit" type="checkbox" name="column_has_unit_${colIndex}" value="on" />
+            <label class="form-check-label">
+              Cette colonne a une unité
+            </label>
+          </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="button" class="btn btn-outline-danger w-100 remove-column">
+            <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+          </button>
+        </div>
+      </div>
     `;
-    container.appendChild(row);
+    columnsContainer.appendChild(row);
+    
+    // Réindexer tous les checkboxes après ajout
+    reindexColumnCheckboxes();
     
     // Ajouter l'événement de suppression
-    row.querySelector('.remove-item').addEventListener('click', function() {
+    row.querySelector('.remove-column').addEventListener('click', function() {
       row.remove();
+      reindexColumnCheckboxes();
+      updateRows(); // Mettre à jour les lignes si une colonne admin est supprimée
     });
+    
+    // Ajouter l'événement pour mettre à jour les lignes quand has_unit change
+    row.querySelector('.column-has-unit').addEventListener('change', function() {
+      updateRows();
+    });
+  }
+  
+  // Fonction pour réindexer les checkboxes après ajout/suppression de colonnes
+  function reindexColumnCheckboxes() {
+    columnsContainer.querySelectorAll('.column-row').forEach((colRow, idx) => {
+      const checkbox = colRow.querySelector('.column-has-unit');
+      if (checkbox) {
+        checkbox.name = `column_has_unit_${idx}`;
+        checkbox.id = `column_has_unit_${idx}`;
+        const label = colRow.querySelector('label[for^="column_has_unit"]');
+        if (label) {
+          label.setAttribute('for', `column_has_unit_${idx}`);
+        }
+      }
+    });
+  }
+  
+  // Fonction pour obtenir les colonnes admin
+  function getAdminColumns() {
+    const columns = [];
+    columnsContainer.querySelectorAll('.column-row').forEach(colRow => {
+      const nameInput = colRow.querySelector('input[name="column_name"]');
+      const typeSelect = colRow.querySelector('select[name="column_type"]');
+      
+      if (nameInput && typeSelect && typeSelect.value === 'admin') {
+        columns.push({
+          name: nameInput.value || nameInput.placeholder,
+          tempId: columns.length // ID temporaire pour la génération
+        });
+      }
+    });
+    return columns;
+  }
+  
+  // Fonction pour créer une nouvelle ligne
+  function createRow() {
+    const rowId = rowCount++;
+    const rowCard = document.createElement('div');
+    rowCard.className = 'row-card';
+    rowCard.dataset.rowId = rowId;
+    
+    const adminColumns = getAdminColumns();
+    let html = `<h6>Ligne ${rowCount}</h6>`;
+    
+    // Créer les inputs pour chaque colonne
+    columnsContainer.querySelectorAll('.column-row').forEach((colRow, colIdx) => {
+      const nameInput = colRow.querySelector('input[name="column_name"]');
+      const typeSelect = colRow.querySelector('select[name="column_type"]');
+      // Chercher le checkbox has_unit dans cette colonne spécifique
+      const hasUnitCheckbox = colRow.querySelector('input.column-has-unit[type="checkbox"]');
+      const hasUnit = hasUnitCheckbox ? hasUnitCheckbox.checked : false;
+      const colName = nameInput ? nameInput.value || nameInput.placeholder : 'Colonne ' + (colIdx + 1);
+      const colId = colIdx; // Utiliser l'index comme ID temporaire
+      
+      if (typeSelect && typeSelect.value === 'admin') {
+        // Colonne de type admin
+        if (hasUnit) {
+          html += `
+            <div class="admin-column-input">
+              <div class="row">
+                <div class="col-md-8">
+                  <label class="form-label">${colName} <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_value" placeholder="Valeur pour cette ligne" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Unité (optionnel)</label>
+                  <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_unit" placeholder="Ex: °C, kg, L" />
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="admin-column-input">
+              <div class="row">
+                <div class="col-md-12">
+                  <label class="form-label">${colName} <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_value" placeholder="Valeur pour cette ligne" required />
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      } else if (hasUnit) {
+        // Colonne non-admin mais avec unité
+        html += `
+          <div class="admin-column-input">
+            <div class="row">
+              <div class="col-md-12">
+                <label class="form-label">Unité pour ${colName} (optionnel)</label>
+                <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_unit" placeholder="Ex: °C, kg, L" />
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    });
+    
+    html += `
+      <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-row">
+        <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+        Supprimer cette ligne
+      </button>
+    `;
+    
+    rowCard.innerHTML = html;
+    rowsContainer.appendChild(rowCard);
+    
+    // Ajouter l'événement de suppression
+    rowCard.querySelector('.remove-row').addEventListener('click', function() {
+      rowCard.remove();
+      updateRowNumbers();
+      updateRowCount();
+    });
+    
+    updateRowCount();
+  }
+  
+  // Fonction pour mettre à jour toutes les lignes existantes
+  function updateRows() {
+    const adminColumns = getAdminColumns();
+    const existingRows = rowsContainer.querySelectorAll('.row-card');
+    
+    existingRows.forEach((rowCard, rowIdx) => {
+      const rowId = rowCard.dataset.rowId;
+      let html = `<h6>Ligne ${rowIdx + 1}</h6>`;
+      
+      // Recréer les inputs pour chaque colonne
+      columnsContainer.querySelectorAll('.column-row').forEach((colRow, colIdx) => {
+        const nameInput = colRow.querySelector('input[name="column_name"]');
+        const typeSelect = colRow.querySelector('select[name="column_type"]');
+        // Chercher le checkbox has_unit dans cette colonne spécifique
+        const hasUnitCheckbox = colRow.querySelector('input.column-has-unit[type="checkbox"]');
+        const hasUnit = hasUnitCheckbox ? hasUnitCheckbox.checked : false;
+        const colName = nameInput ? nameInput.value || nameInput.placeholder : 'Colonne ' + (colIdx + 1);
+        const colId = colIdx;
+        
+        if (typeSelect && typeSelect.value === 'admin') {
+          // Colonne de type admin
+          // Récupérer l'ancienne valeur et unité si elles existent
+          const oldValueInput = rowCard.querySelector(`input[name="row_${rowId}_col_${colIdx}_admin_value"]`);
+          const oldUnitInput = rowCard.querySelector(`input[name="row_${rowId}_col_${colIdx}_admin_unit"]`);
+          const oldValue = oldValueInput ? oldValueInput.value : '';
+          const oldUnit = oldUnitInput ? oldUnitInput.value : '';
+          
+          if (hasUnit) {
+            html += `
+              <div class="admin-column-input">
+                <div class="row">
+                  <div class="col-md-8">
+                    <label class="form-label">${colName} <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_value" value="${oldValue}" placeholder="Valeur pour cette ligne" required />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Unité (optionnel)</label>
+                    <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_unit" value="${oldUnit}" placeholder="Ex: °C, kg, L" />
+                  </div>
+                </div>
+              </div>
+            `;
+          } else {
+            html += `
+              <div class="admin-column-input">
+                <div class="row">
+                  <div class="col-md-12">
+                    <label class="form-label">${colName} <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_value" value="${oldValue}" placeholder="Valeur pour cette ligne" required />
+                  </div>
+                </div>
+              </div>
+            `;
+          }
+        } else if (hasUnit) {
+          // Colonne non-admin mais avec unité
+          const oldUnitInput = rowCard.querySelector(`input[name="row_${rowId}_col_${colIdx}_admin_unit"]`);
+          const oldUnit = oldUnitInput ? oldUnitInput.value : '';
+          
+          html += `
+            <div class="admin-column-input">
+              <div class="row">
+                <div class="col-md-12">
+                  <label class="form-label">Unité pour ${colName} (optionnel)</label>
+                  <input type="text" class="form-control" name="row_${rowId}_col_${colId}_admin_unit" value="${oldUnit}" placeholder="Ex: °C, kg, L" />
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      });
+      
+      html += `
+        <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-row">
+          <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+          Supprimer cette ligne
+        </button>
+      `;
+      
+      rowCard.innerHTML = html;
+      
+      // Réattacher l'événement de suppression
+      rowCard.querySelector('.remove-row').addEventListener('click', function() {
+        rowCard.remove();
+        updateRowNumbers();
+        updateRowCount();
+      });
+    });
+    
+    updateRowNumbers();
+  }
+  
+  // Fonction pour mettre à jour les numéros de lignes
+  function updateRowNumbers() {
+    const rows = rowsContainer.querySelectorAll('.row-card');
+    rows.forEach((row, index) => {
+      const h6 = row.querySelector('h6');
+      if (h6) {
+        h6.textContent = 'Ligne ' + (index + 1);
+      }
+    });
+  }
+  
+  // Fonction pour mettre à jour le compteur de lignes
+  function updateRowCount() {
+    const rows = rowsContainer.querySelectorAll('.row-card');
+    rowCount = rows.length;
+    rowCountInput.value = rowCount;
+  }
+  
+  // Ajouter une colonne
+  addColumnButton.addEventListener('click', function() {
+    createColumnRow();
   });
   
-  // Ajouter les événements de suppression aux éléments existants
-  document.querySelectorAll('.remove-item').forEach(btn => {
+  // Ajouter une ligne
+  addRowButton.addEventListener('click', function() {
+    createRow();
+  });
+  
+  // Écouter les changements de type de colonne et has_unit pour mettre à jour les lignes
+  columnsContainer.addEventListener('change', function(e) {
+    if (e.target.classList.contains('column-type') || 
+        (e.target.type === 'checkbox' && e.target.classList.contains('column-has-unit'))) {
+      updateRows();
+    }
+  });
+  
+  // Écouter les changements de nom de colonne pour mettre à jour les labels des lignes
+  columnsContainer.addEventListener('input', function(e) {
+    if (e.target.name === 'column_name') {
+      updateRows();
+    }
+  });
+  
+  // Réindexer les checkboxes au chargement de la page
+  reindexColumnCheckboxes();
+  
+  // Configurer les événements de suppression pour les colonnes existantes
+  document.querySelectorAll('.remove-column').forEach(btn => {
     btn.addEventListener('click', function() {
-      this.closest('.item-row').remove();
+      this.closest('.column-row').remove();
+      reindexColumnCheckboxes();
+      updateRows();
     });
   });
   
-  // Fonction pour charger les items d'une checklist existante
-  async function loadTemplateItems(templateId) {
+  // Configurer les événements de suppression pour les lignes existantes
+  document.querySelectorAll('.remove-row').forEach(btn => {
+    btn.addEventListener('click', function() {
+      this.closest('.row-card').remove();
+      updateRowNumbers();
+      updateRowCount();
+    });
+  });
+  
+  // Fonction pour charger les colonnes d'une checklist existante
+  async function loadTemplateColumns(templateId) {
     if (!templateId) return;
     
     try {
-      const response = await fetch(`/api/checklist-template/${templateId}/items`);
+      const response = await fetch(`/api/checklist-template/${templateId}/columns`);
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
       const data = await response.json();
       
-      if (data.success && data.items && data.items.length > 0) {
-        // Vider les lignes existantes sauf la première
-        const itemsContainer = document.getElementById('items-container');
-        const existingRows = itemsContainer.querySelectorAll('.item-row');
-        existingRows.forEach((row, index) => {
-          if (index > 0) {
-            row.remove();
-          } else {
-            // Vider la première ligne
-            const input = row.querySelector('input[name="item_label"]');
-            if (input) input.value = '';
-          }
+      if (!data.success) {
+        throw new Error(data.error || "Erreur lors du chargement de la checklist");
+      }
+      
+      if (!data.columns || data.columns.length === 0) {
+        alert("Cette checklist n'a pas de colonnes définies.");
+        return;
+      }
+      
+      // Vider les colonnes existantes
+      columnsContainer.innerHTML = '';
+      
+      // Ajouter les colonnes du modèle
+      data.columns.forEach((column, idx) => {
+        const row = document.createElement('div');
+        row.className = 'column-row';
+        row.innerHTML = `
+          <div class="row">
+            <div class="col-md-3">
+              <label class="form-label">Nom de la colonne <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="column_name" value="${(column.name || '').replace(/"/g, '&quot;')}" placeholder="Ex: Température" required />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Type de remplissage <span class="text-danger">*</span></label>
+              <select class="form-select column-type" name="column_type" required>
+                <option value="admin" ${column.fill_type === 'admin' ? 'selected' : ''}>Rempli par l'admin</option>
+                <option value="user_text" ${column.fill_type === 'user_text' ? 'selected' : ''}>Utilisateur - Texte libre</option>
+                <option value="user_number" ${column.fill_type === 'user_number' ? 'selected' : ''}>Utilisateur - Nombre</option>
+                <option value="user_date" ${column.fill_type === 'user_date' ? 'selected' : ''}>Utilisateur - Date</option>
+                <option value="user_checkbox" ${column.fill_type === 'user_checkbox' ? 'selected' : ''}>Utilisateur - Case à cocher</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <div class="form-check">
+                <input class="form-check-input column-has-unit" type="checkbox" name="column_has_unit_${idx}" id="column_has_unit_${idx}" value="on" ${column.has_unit ? 'checked' : ''} />
+                <label class="form-check-label" for="column_has_unit_${idx}">
+                  Cette colonne a une unité
+                </label>
+              </div>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button type="button" class="btn btn-outline-danger w-100 remove-column">
+                <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Supprimer" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;">
+              </button>
+            </div>
+          </div>
+        `;
+        columnsContainer.appendChild(row);
+        
+        // Ajouter l'événement de suppression
+        row.querySelector('.remove-column').addEventListener('click', function() {
+          row.remove();
+          reindexColumnCheckboxes();
+          updateRows();
         });
         
-        // Ajouter les items du modèle
-        data.items.forEach((item, index) => {
-          let row;
-          if (index === 0) {
-            // Utiliser la première ligne existante
-            row = itemsContainer.querySelector('.item-row');
-          } else {
-            // Cloner la première ligne pour les autres
-            const template = itemsContainer.querySelector('.item-row');
-            row = template.cloneNode(true);
-            itemsContainer.appendChild(row);
-            
-            // Ajouter l'événement de suppression au nouveau bouton
-            const removeBtn = row.querySelector('.remove-item');
-            if (removeBtn) {
-              removeBtn.addEventListener('click', function() {
-                this.closest('.item-row').remove();
-              });
-            }
-          }
-          
-          // Remplir le champ label
-          const labelInput = row.querySelector('input[name="item_label"]');
-          if (labelInput) labelInput.value = item.label;
+        // Ajouter l'événement pour mettre à jour les lignes quand has_unit change
+        row.querySelector('.column-has-unit').addEventListener('change', function() {
+          updateRows();
         });
-      }
+      });
+      
+      // Réindexer les checkboxes après chargement
+      reindexColumnCheckboxes();
+      
+      // Ajouter les événements de changement pour les colonnes chargées
+      columnsContainer.querySelectorAll('.column-type').forEach(select => {
+        select.addEventListener('change', function() {
+          updateRows();
+        });
+      });
+      
+      updateRows();
     } catch (error) {
       console.error("Erreur lors du chargement de la checklist:", error);
-      alert("Erreur lors du chargement de la checklist");
+      alert("Erreur lors du chargement de la checklist: " + error.message);
     }
   }
   
   // Exposer la fonction globalement
-  window.loadTemplateItems = loadTemplateItems;
+  window.loadTemplateColumns = loadTemplateColumns;
 });
 </script>
 {% endblock %}
-

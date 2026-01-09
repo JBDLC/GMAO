@@ -47,16 +47,20 @@
     font-weight: 600;
     margin-bottom: 0.5rem;
   }
-  .form-control {
+  .form-control, .form-select {
     border: 1px solid #ced4da;
     border-radius: 4px;
     padding: 0.5rem 0.75rem;
     transition: all 0.2s;
   }
-  .form-control:focus {
+  .form-control:focus, .form-select:focus {
     border-color: #1a3b50;
     box-shadow: 0 0 0 0.25rem rgba(26, 59, 80, 0.25);
     outline: none;
+  }
+  .form-control:disabled {
+    background-color: #e9ecef;
+    opacity: 1;
   }
   .btn-success {
     background-color: #1a3b50;
@@ -81,6 +85,48 @@
     background-color: #5a6268;
     border-color: #5a6268;
     color: white;
+  }
+  .row-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .row-card h6 {
+    color: #1a3b50;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  .column-input-group {
+    margin-bottom: 1rem;
+  }
+  .column-input-group:last-child {
+    margin-bottom: 0;
+  }
+  .admin-value-display {
+    background: #e9ecef;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    color: #495057;
+    font-weight: 500;
+    border: 1px solid #ced4da;
+  }
+  .table {
+    margin-bottom: 0;
+  }
+  .table thead th {
+    background-color: #1a3b50;
+    color: white;
+    font-weight: 600;
+    vertical-align: middle;
+    text-align: center;
+  }
+  .table tbody td {
+    vertical-align: middle;
+  }
+  .table tbody tr:first-child td:first-child {
+    background-color: #f8f9fa;
   }
   
   /* Responsive */
@@ -113,34 +159,72 @@
   <h1 class="page-title">Remplir : {{ template.name }}</h1>
 </div>
 
+<div class="info-card">
+  <h5>Instructions</h5>
+  <p class="text-muted mb-0">Remplissez les colonnes de type "Utilisateur" pour chaque ligne/question. Les colonnes pré-remplies par l'admin sont en lecture seule.</p>
+</div>
+
 <div class="form-card">
-<form method="post">
-  <div class="info-card">
-    <h5>Éléments</h5>
-      {% if template.items %}
-        {% for item in template.items %}
-        <div class="form-check mb-2">
-          <input class="form-check-input" type="checkbox" name="item_{{ item.id }}" id="item_{{ item.id }}" />
-          <label class="form-check-label" for="item_{{ item.id }}">
-            {{ item.label }}
-          </label>
-        </div>
-        {% endfor %}
-      {% else %}
-        <p class="text-muted">Aucun élément dans cette check list.</p>
-      {% endif %}
-  </div>
-  
-  <div class="mb-3">
-    <label class="form-label">Commentaire (optionnel)</label>
-    <textarea class="form-control" name="comment" rows="3" placeholder="Ajouter un commentaire..."></textarea>
-  </div>
+<form method="post" id="checklist-form">
+  {% if rows and columns %}
+    <div class="table-responsive">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th style="min-width: 150px;">Ligne</th>
+            {% for column in columns %}
+            <th>
+              {{ column.name }}
+              {% if column.has_unit %}
+                <small class="text-muted d-block">(unité par ligne)</small>
+              {% endif %}
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="fw-bold">Ligne {{ loop.index }}</td>
+            {% for column in columns %}
+              {% set row_value = row.admin_values|selectattr('column_id', 'equalto', column.id)|first %}
+              <td>
+                {% if column.fill_type == 'admin' %}
+                  {{ row_value.value if row_value else '' }}{% if row_value and row_value.unit %} {{ row_value.unit }}{% endif %}
+                {% elif column.fill_type == 'user_text' %}
+                  <div class="d-flex align-items-center gap-2">
+                    <input type="text" class="form-control form-control-sm" name="row_{{ row.id }}_col_{{ column.id }}_value" placeholder="Texte..." />
+                    {% if row_value and row_value.unit %}<span class="text-muted">{{ row_value.unit }}</span>{% endif %}
+                  </div>
+                {% elif column.fill_type == 'user_number' %}
+                  <div class="d-flex align-items-center gap-2">
+                    <input type="number" step="any" class="form-control form-control-sm" name="row_{{ row.id }}_col_{{ column.id }}_value" placeholder="Nombre..." />
+                    {% if row_value and row_value.unit %}<span class="text-muted">{{ row_value.unit }}</span>{% endif %}
+                  </div>
+                {% elif column.fill_type == 'user_date' %}
+                  <input type="date" class="form-control form-control-sm" name="row_{{ row.id }}_col_{{ column.id }}_value" />
+                {% elif column.fill_type == 'user_checkbox' %}
+                  <div class="form-check d-flex justify-content-center">
+                    <input type="checkbox" class="form-check-input" name="row_{{ row.id }}_col_{{ column.id }}_value" />
+                  </div>
+                {% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="alert alert-info">
+      <p class="mb-0">Aucune ligne/question définie dans cette checklist. Veuillez d'abord créer des lignes dans le modèle.</p>
+    </div>
+  {% endif %}
   
   <div class="d-flex gap-2 mt-4">
-    <button type="submit" class="btn btn-success">Enregistrer</button>
+    <button type="submit" class="btn btn-success" {% if not rows %}disabled{% endif %}>Enregistrer</button>
     <a href="{{ url_for('machine_detail', machine_id=machine.id) }}" class="btn btn-secondary">Annuler</a>
   </div>
 </form>
 </div>
 {% endblock %}
-

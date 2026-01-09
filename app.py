@@ -632,11 +632,17 @@ class ChecklistTemplate(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=dt.datetime.utcnow)
 
     machine = db.relationship("Machine", backref="checklist_templates")
-    items = db.relationship(
-        "ChecklistItem",
+    columns = db.relationship(
+        "ChecklistColumn",
         back_populates="template",
         cascade="all, delete-orphan",
-        order_by="ChecklistItem.id",
+        order_by="ChecklistColumn.order",
+    )
+    rows = db.relationship(
+        "ChecklistTemplateRow",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="ChecklistTemplateRow.order",
     )
     instances = db.relationship(
         "ChecklistInstance",
@@ -646,13 +652,47 @@ class ChecklistTemplate(db.Model):
     )
 
 
-class ChecklistItem(db.Model):
+class ChecklistColumn(db.Model):
+    """Colonnes définies dans un modèle de checklist"""
     id = db.Column(db.Integer, primary_key=True)
     template_id = db.Column(db.Integer, db.ForeignKey("checklist_template.id"), nullable=False)
-    label = db.Column(db.String(300), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    fill_type = db.Column(db.String(50), nullable=False)  # 'admin', 'user_text', 'user_number', 'user_date', 'user_checkbox'
+    has_unit = db.Column(db.Boolean, default=False, nullable=False)  # Indique si cette colonne a une unité
     order = db.Column(db.Integer, default=0)
 
-    template = db.relationship("ChecklistTemplate", back_populates="items")
+    template = db.relationship("ChecklistTemplate", back_populates="columns")
+    template_row_values = db.relationship(
+        "ChecklistTemplateRowValue",
+        back_populates="column",
+        cascade="all, delete-orphan",
+    )
+
+
+class ChecklistTemplateRow(db.Model):
+    """Lignes/questions définies dans un modèle de checklist"""
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey("checklist_template.id"), nullable=False)
+    order = db.Column(db.Integer, default=0)
+
+    template = db.relationship("ChecklistTemplate", back_populates="rows")
+    admin_values = db.relationship(
+        "ChecklistTemplateRowValue",
+        back_populates="row",
+        cascade="all, delete-orphan",
+    )
+
+
+class ChecklistTemplateRowValue(db.Model):
+    """Valeurs admin pré-remplies pour chaque colonne de chaque ligne du template"""
+    id = db.Column(db.Integer, primary_key=True)
+    row_id = db.Column(db.Integer, db.ForeignKey("checklist_template_row.id"), nullable=False)
+    column_id = db.Column(db.Integer, db.ForeignKey("checklist_column.id"), nullable=False)
+    value = db.Column(db.Text)  # Valeur admin pré-remplie
+    unit = db.Column(db.String(50))  # Unité optionnelle pour cette ligne (kg, L, °C, etc.)
+
+    row = db.relationship("ChecklistTemplateRow", back_populates="admin_values")
+    column = db.relationship("ChecklistColumn", back_populates="template_row_values")
 
 
 class ChecklistInstance(db.Model):
@@ -666,7 +706,7 @@ class ChecklistInstance(db.Model):
     template = db.relationship("ChecklistTemplate", back_populates="instances")
     machine = db.relationship("Machine", backref="checklist_instances")
     user = db.relationship("User")
-    values = db.relationship(
+    row_values = db.relationship(
         "ChecklistInstanceValue",
         back_populates="instance",
         cascade="all, delete-orphan",
@@ -674,13 +714,16 @@ class ChecklistInstance(db.Model):
 
 
 class ChecklistInstanceValue(db.Model):
+    """Valeurs utilisateur remplies pour chaque colonne de chaque ligne du template"""
     id = db.Column(db.Integer, primary_key=True)
     instance_id = db.Column(db.Integer, db.ForeignKey("checklist_instance.id"), nullable=False)
-    item_id = db.Column(db.Integer, db.ForeignKey("checklist_item.id"), nullable=False)
-    checked = db.Column(db.Boolean, default=False)
+    template_row_id = db.Column(db.Integer, db.ForeignKey("checklist_template_row.id"), nullable=False)
+    column_id = db.Column(db.Integer, db.ForeignKey("checklist_column.id"), nullable=False)
+    value = db.Column(db.Text)  # Valeur stockée comme texte (sera convertie selon le type)
 
-    instance = db.relationship("ChecklistInstance", back_populates="values")
-    item = db.relationship("ChecklistItem")
+    instance = db.relationship("ChecklistInstance", back_populates="row_values")
+    template_row = db.relationship("ChecklistTemplateRow")
+    column = db.relationship("ChecklistColumn")
 
 
 class ChatMessage(db.Model):
@@ -848,12 +891,43 @@ with app.app_context():
             except Exception:
                 pass
             
+            # Index pour ChecklistColumn
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_column_template_id ON checklist_column(template_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour ChecklistTemplateRow
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_template_row_template_id ON checklist_template_row(template_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour ChecklistTemplateRowValue
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_template_row_value_row_id ON checklist_template_row_value(row_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_template_row_value_column_id ON checklist_template_row_value(column_id)"))
+                conn.commit()
+            except Exception:
+                pass
+            
             # Index pour ChecklistInstance
             try:
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_template_id ON checklist_instance(template_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_machine_id ON checklist_instance(machine_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_user_id ON checklist_instance(user_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_created_at ON checklist_instance(created_at)"))
+                conn.commit()
+            except Exception:
+                pass
+            
+            # Index pour ChecklistInstanceValue
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_value_instance_id ON checklist_instance_value(instance_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_value_template_row_id ON checklist_instance_value(template_row_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_value_column_id ON checklist_instance_value(column_id)"))
                 conn.commit()
             except Exception:
                 pass
@@ -1162,6 +1236,134 @@ with app.app_context():
                 pass
     except Exception as exc:
         print(f"Erreur lors de la migration report_photo: {exc}")
+        pass
+    
+    # Migration pour ajouter les colonnes manquantes à checklist_instance_value
+    try:
+        inspector = inspect(db.engine)
+        if "checklist_instance_value" in inspector.get_table_names():
+            instance_value_columns_info = inspector.get_columns("checklist_instance_value")
+            instance_value_columns = {col["name"] for col in instance_value_columns_info}
+            
+            print(f"Colonnes actuelles dans checklist_instance_value: {sorted(instance_value_columns)}")
+            
+            # Toutes les colonnes requises selon le modèle ChecklistInstanceValue
+            required_columns = {
+                "instance_id": "INTEGER",
+                "template_row_id": "INTEGER",
+                "column_id": "INTEGER",
+                "value": "TEXT"
+            }
+            
+            columns_added = []
+            with db.engine.connect() as conn:
+                # Étape 1: Ajouter d'abord toutes les colonnes manquantes
+                for col_name, col_type in required_columns.items():
+                    if col_name not in instance_value_columns:
+                        try:
+                            conn.execute(text(f"ALTER TABLE checklist_instance_value ADD COLUMN {col_name} {col_type}"))
+                            conn.commit()
+                            print(f"✓ Colonne {col_name} ajoutée à checklist_instance_value")
+                            columns_added.append(col_name)
+                            
+                            # Créer l'index si nécessaire (seulement pour les colonnes qui en ont besoin)
+                            if col_name in ["instance_id", "template_row_id", "column_id"]:
+                                try:
+                                    index_name = f"ix_checklist_instance_value_{col_name}"
+                                    conn.execute(text(f"CREATE INDEX IF NOT EXISTS {index_name} ON checklist_instance_value({col_name})"))
+                                    conn.commit()
+                                    print(f"✓ Index créé pour {col_name} dans checklist_instance_value")
+                                except Exception as idx_exc:
+                                    print(f"⚠ Note lors de la création de l'index pour {col_name}: {idx_exc}")
+                        except Exception as col_exc:
+                            print(f"✗ Erreur lors de l'ajout de la colonne {col_name}: {col_exc}")
+                    else:
+                        print(f"✓ Colonne {col_name} existe déjà")
+                
+                # Étape 2: Recréer la table sans item_id si elle existe (SQLite ne supporte pas DROP COLUMN)
+                # On le fait après avoir ajouté les colonnes manquantes pour s'assurer qu'elles existent
+                if "item_id" in instance_value_columns and db.engine.dialect.name == 'sqlite':
+                    try:
+                        print("🔄 Recréation de la table checklist_instance_value sans item_id...")
+                        # Re-vérifier les colonnes après les ajouts
+                        updated_columns_info = inspector.get_columns("checklist_instance_value")
+                        updated_columns = {col["name"] for col in updated_columns_info}
+                        # Vérifier quelles colonnes existent pour la copie
+                        has_template_row_id = "template_row_id" in updated_columns
+                        has_column_id = "column_id" in updated_columns
+                        has_value = "value" in updated_columns
+                        has_instance_id = "instance_id" in updated_columns
+                        
+                        if not has_instance_id:
+                            print("⚠ instance_id manquante, impossible de recréer la table")
+                            raise Exception("instance_id manquante")
+                        
+                        # Sauvegarder les données existantes
+                        conn.execute(text("""
+                            CREATE TABLE checklist_instance_value_new (
+                                id INTEGER PRIMARY KEY,
+                                instance_id INTEGER NOT NULL,
+                                template_row_id INTEGER NOT NULL,
+                                column_id INTEGER NOT NULL,
+                                value TEXT,
+                                FOREIGN KEY (instance_id) REFERENCES checklist_instance(id),
+                                FOREIGN KEY (template_row_id) REFERENCES checklist_template_row(id),
+                                FOREIGN KEY (column_id) REFERENCES checklist_column(id)
+                            )
+                        """))
+                        
+                        # Construire la requête SELECT selon les colonnes disponibles
+                        select_cols = ["id", "instance_id"]
+                        if has_template_row_id:
+                            select_cols.append("template_row_id")
+                        else:
+                            select_cols.append("0 as template_row_id")
+                        if has_column_id:
+                            select_cols.append("column_id")
+                        else:
+                            select_cols.append("0 as column_id")
+                        if has_value:
+                            select_cols.append("value")
+                        else:
+                            select_cols.append("NULL as value")
+                        
+                        # Copier les données (en ignorant item_id)
+                        select_query = f"""
+                            INSERT INTO checklist_instance_value_new (id, instance_id, template_row_id, column_id, value)
+                            SELECT {', '.join(select_cols)}
+                            FROM checklist_instance_value
+                        """
+                        conn.execute(text(select_query))
+                        
+                        # Supprimer l'ancienne table
+                        conn.execute(text("DROP TABLE checklist_instance_value"))
+                        # Renommer la nouvelle table
+                        conn.execute(text("ALTER TABLE checklist_instance_value_new RENAME TO checklist_instance_value"))
+                        # Recréer les index
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_value_instance_id ON checklist_instance_value(instance_id)"))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_value_template_row_id ON checklist_instance_value(template_row_id)"))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_checklist_instance_value_column_id ON checklist_instance_value(column_id)"))
+                        conn.commit()
+                        print("✓ Table checklist_instance_value recréée sans item_id")
+                    except Exception as recreate_exc:
+                        print(f"⚠ Erreur lors de la recréation de la table: {recreate_exc}")
+                        import traceback
+                        traceback.print_exc()
+                        conn.rollback()
+                
+                if columns_added:
+                    print(f"Migration terminée: {len(columns_added)} colonne(s) ajoutée(s): {', '.join(columns_added)}")
+                else:
+                    print("Aucune colonne à ajouter, la table est à jour")
+        else:
+            # Si la table n'existe pas, la créer avec toutes les colonnes
+            print("Table checklist_instance_value n'existe pas, création...")
+            db.create_all()
+            print("✓ Table checklist_instance_value créée")
+    except Exception as exc:
+        print(f"✗ Erreur lors de la migration checklist_instance_value: {exc}")
+        import traceback
+        traceback.print_exc()
         pass
     updated = PreventiveComponent.query.filter_by(field_type="increment").update({"field_type": "number"})
     if updated:
@@ -1935,7 +2137,7 @@ def machine_detail(machine_id):
         ChecklistTemplate.query
         .filter_by(machine_id=machine.id)
         .options(
-            joinedload(ChecklistTemplate.items),
+            joinedload(ChecklistTemplate.columns),
             selectinload(ChecklistTemplate.instances).joinedload(ChecklistInstance.user)
         )
         .order_by(ChecklistTemplate.name)
@@ -2154,18 +2356,72 @@ def new_checklist_template(machine_id):
         db.session.add(template)
         db.session.flush()  # Pour obtenir l'ID
         
-        # Récupérer les items depuis le formulaire
-        item_labels = request.form.getlist("item_label")
-        for idx, label in enumerate(item_labels):
-            label = label.strip()
-            if label:
-                item = ChecklistItem(template_id=template.id, label=label, order=idx)
-                db.session.add(item)
+        # Récupérer les colonnes depuis le formulaire
+        column_names = request.form.getlist("column_name")
+        column_types = request.form.getlist("column_type")
+        
+        columns_created = []
+        for idx, (col_name, col_type) in enumerate(zip(column_names, column_types)):
+            col_name = col_name.strip()
+            if col_name:
+                # Vérifier si cette colonne a une unité (le checkbox est coché)
+                # Les checkboxes utilisent maintenant column_has_unit_{idx}
+                has_unit_key = f"column_has_unit_{idx}"
+                has_unit = request.form.get(has_unit_key) == "on"
+                
+                column = ChecklistColumn(
+                    template_id=template.id,
+                    name=col_name,
+                    fill_type=col_type,
+                    has_unit=has_unit,
+                    order=idx
+                )
+                db.session.add(column)
+                db.session.flush()
+                columns_created.append(column)
+        
+        # Récupérer les lignes depuis le formulaire
+        row_count = int(request.form.get("row_count", 0))
+        for row_idx in range(row_count):
+            row = ChecklistTemplateRow(
+                template_id=template.id,
+                order=row_idx
+            )
+            db.session.add(row)
+            db.session.flush()
+            
+            # Pour chaque colonne, récupérer la valeur (si admin) et l'unité (si has_unit)
+            # Utiliser l'ordre de la colonne comme clé (car les IDs ne sont pas encore définis lors de la création)
+            for col_idx, column in enumerate(columns_created):
+                unit_key = f"row_{row_idx}_col_{col_idx}_admin_unit"
+                admin_unit = request.form.get(unit_key, "").strip()
+                
+                if column.fill_type == "admin":
+                    # Colonne admin : récupérer valeur et unité
+                    value_key = f"row_{row_idx}_col_{col_idx}_admin_value"
+                    admin_value = request.form.get(value_key, "").strip()
+                    if admin_value:
+                        row_value = ChecklistTemplateRowValue(
+                            row_id=row.id,
+                            column_id=column.id,
+                            value=admin_value,
+                            unit=admin_unit if admin_unit else None
+                        )
+                        db.session.add(row_value)
+                elif column.has_unit and admin_unit:
+                    # Colonne non-admin mais avec unité : créer une entrée avec seulement l'unité
+                    row_value = ChecklistTemplateRowValue(
+                        row_id=row.id,
+                        column_id=column.id,
+                        value=None,
+                        unit=admin_unit
+                    )
+                    db.session.add(row_value)
         
         try:
             db.session.commit()
             flash("Check list créée avec succès", "success")
-            return redirect(url_for("machine_detail", machine_id=machine_id))
+            return redirect(get_machine_detail_url(machine_id, 'checklists'))
         except Exception as exc:
             db.session.rollback()
             flash(f"Erreur: {exc}", "danger")
@@ -2174,7 +2430,7 @@ def new_checklist_template(machine_id):
     # Récupérer toutes les checklists existantes pour le dropdown
     all_checklists = ChecklistTemplate.query.order_by(ChecklistTemplate.name).all()
     
-    return render_template("checklist_template_form.html", machine=machine, template=None, all_checklists=all_checklists)
+    return render_template("checklist_template_form.html", machine=machine, template=None, all_checklists=all_checklists, columns=[], rows=[])
 
 
 @app.route("/machines/<int:machine_id>/checklists/<int:template_id>/edit", methods=["GET", "POST"])
@@ -2195,16 +2451,72 @@ def edit_checklist_template(machine_id, template_id):
         
         template.name = name
         
-        # Supprimer les anciens items
-        ChecklistItem.query.filter_by(template_id=template.id).delete()
+        # Supprimer les anciennes lignes et leurs valeurs (cascade supprimera les valeurs)
+        ChecklistTemplateRow.query.filter_by(template_id=template.id).delete()
+        # Supprimer les anciennes colonnes
+        ChecklistColumn.query.filter_by(template_id=template.id).delete()
         
-        # Ajouter les nouveaux items
-        item_labels = request.form.getlist("item_label")
-        for idx, label in enumerate(item_labels):
-            label = label.strip()
-            if label:
-                item = ChecklistItem(template_id=template.id, label=label, order=idx)
-                db.session.add(item)
+        # Ajouter les nouvelles colonnes
+        column_names = request.form.getlist("column_name")
+        column_types = request.form.getlist("column_type")
+        
+        columns_created = []
+        for idx, (col_name, col_type) in enumerate(zip(column_names, column_types)):
+            col_name = col_name.strip()
+            if col_name:
+                # Vérifier si cette colonne a une unité (le checkbox est coché)
+                # Les checkboxes utilisent maintenant column_has_unit_{idx}
+                has_unit_key = f"column_has_unit_{idx}"
+                has_unit = request.form.get(has_unit_key) == "on"
+                
+                column = ChecklistColumn(
+                    template_id=template.id,
+                    name=col_name,
+                    fill_type=col_type,
+                    has_unit=has_unit,
+                    order=idx
+                )
+                db.session.add(column)
+                db.session.flush()
+                columns_created.append(column)
+        
+        # Récupérer les lignes depuis le formulaire
+        row_count = int(request.form.get("row_count", 0))
+        for row_idx in range(row_count):
+            row = ChecklistTemplateRow(
+                template_id=template.id,
+                order=row_idx
+            )
+            db.session.add(row)
+            db.session.flush()
+            
+            # Pour chaque colonne, récupérer la valeur (si admin) et l'unité (si has_unit)
+            # Utiliser l'ordre de la colonne comme clé (car les IDs peuvent changer lors de la modification)
+            for col_idx, column in enumerate(columns_created):
+                unit_key = f"row_{row_idx}_col_{col_idx}_admin_unit"
+                admin_unit = request.form.get(unit_key, "").strip()
+                
+                if column.fill_type == "admin":
+                    # Colonne admin : récupérer valeur et unité
+                    value_key = f"row_{row_idx}_col_{col_idx}_admin_value"
+                    admin_value = request.form.get(value_key, "").strip()
+                    if admin_value:
+                        row_value = ChecklistTemplateRowValue(
+                            row_id=row.id,
+                            column_id=column.id,
+                            value=admin_value,
+                            unit=admin_unit if admin_unit else None
+                        )
+                        db.session.add(row_value)
+                elif column.has_unit and admin_unit:
+                    # Colonne non-admin mais avec unité : créer une entrée avec seulement l'unité
+                    row_value = ChecklistTemplateRowValue(
+                        row_id=row.id,
+                        column_id=column.id,
+                        value=None,
+                        unit=admin_unit
+                    )
+                    db.session.add(row_value)
         
         try:
             db.session.commit()
@@ -2218,7 +2530,11 @@ def edit_checklist_template(machine_id, template_id):
     # Récupérer toutes les checklists existantes pour le dropdown
     all_checklists = ChecklistTemplate.query.order_by(ChecklistTemplate.name).all()
     
-    return render_template("checklist_template_form.html", machine=machine, template=template, all_checklists=all_checklists)
+    # Charger les colonnes et lignes du template
+    columns = template.columns if template else []
+    rows = template.rows if template else []
+    
+    return render_template("checklist_template_form.html", machine=machine, template=template, all_checklists=all_checklists, columns=columns, rows=rows)
 
 
 @app.route("/machines/<int:machine_id>/checklists/<int:template_id>/delete", methods=["POST"])
@@ -2264,15 +2580,26 @@ def fill_checklist(machine_id, template_id):
         db.session.add(instance)
         db.session.flush()
         
-        # Récupérer les valeurs cochées
-        for item in template.items:
-            checked = request.form.get(f"item_{item.id}") == "on"
-            value = ChecklistInstanceValue(
-                instance_id=instance.id,
-                item_id=item.id,
-                checked=checked
-            )
-            db.session.add(value)
+        # Pour chaque ligne du template, récupérer les valeurs utilisateur
+        for template_row in template.rows:
+            # Pour chaque colonne de type utilisateur, récupérer la valeur
+            for column in template.columns:
+                if column.fill_type.startswith("user_"):
+                    value_key = f"row_{template_row.id}_col_{column.id}_value"
+                    if column.fill_type == "user_checkbox":
+                        # Pour les checkboxes, la valeur est "on" si cochée, sinon None
+                        value = "on" if value_key in request.form else None
+                    else:
+                        value = request.form.get(value_key, "").strip()
+                    
+                    if value:
+                        instance_value = ChecklistInstanceValue(
+                            instance_id=instance.id,
+                            template_row_id=template_row.id,
+                            column_id=column.id,
+                            value=value
+                        )
+                        db.session.add(instance_value)
         
         try:
             db.session.commit()
@@ -2290,7 +2617,16 @@ def fill_checklist(machine_id, template_id):
             flash(f"Erreur: {exc}", "danger")
             return redirect(request.url)
     
-    return render_template("checklist_fill.html", machine=machine, template=template)
+    # Charger les colonnes et lignes du template avec leurs valeurs admin, triées par ordre
+    # Utiliser joinedload pour charger les admin_values avec les rows
+    template = ChecklistTemplate.query.options(
+        joinedload(ChecklistTemplate.rows).joinedload(ChecklistTemplateRow.admin_values)
+    ).get(template_id)
+    
+    columns = sorted(template.columns, key=lambda x: x.order)
+    rows = sorted(template.rows, key=lambda x: x.order)
+    
+    return render_template("checklist_fill.html", machine=machine, template=template, columns=columns, rows=rows)
 
 
 @app.route("/machines/<int:machine_id>/checklists/<int:template_id>/instances")
@@ -2318,7 +2654,12 @@ def checklist_instance_detail(machine_id, template_id, instance_id):
     if instance.template_id != template_id or instance.machine_id != machine_id:
         abort(404)
     
-    return render_template("checklist_instance_detail.html", machine=machine, template=template, instance=instance)
+    # Charger les colonnes et lignes du template avec leurs valeurs
+    # Trier les colonnes et lignes par ordre
+    columns = sorted(template.columns, key=lambda x: x.order)
+    rows = sorted(template.rows, key=lambda x: x.order)
+    
+    return render_template("checklist_instance_detail.html", machine=machine, template=template, instance=instance, columns=columns, rows=rows)
 
 
 @app.route("/machines/new", methods=["GET", "POST"])
@@ -5188,17 +5529,23 @@ def get_report_components(report_id):
     return json.dumps({"success": True, "components": components})
 
 
-@app.route("/api/checklist-template/<int:template_id>/items")
+@app.route("/api/checklist-template/<int:template_id>/columns")
 @login_required
-def get_checklist_template_items(template_id):
-    """API pour récupérer les items d'un modèle de checklist"""
-    template = ChecklistTemplate.query.get_or_404(template_id)
-    items_data = []
-    for item in template.items:
-        items_data.append({
-            "label": item.label
+def get_checklist_template_columns(template_id):
+    """API pour récupérer les colonnes d'un modèle de checklist"""
+    template = ChecklistTemplate.query.options(
+        joinedload(ChecklistTemplate.columns)
+    ).get_or_404(template_id)
+    columns_data = []
+    for column in sorted(template.columns, key=lambda x: x.order):
+        columns_data.append({
+            "id": column.id,
+            "name": column.name,
+            "fill_type": column.fill_type,
+            "has_unit": column.has_unit,
+            "order": column.order
         })
-    return jsonify(success=True, items=items_data)
+    return jsonify(success=True, columns=columns_data)
 
 
 @app.route("/api/machine/<int:machine_id>/available-counters")
